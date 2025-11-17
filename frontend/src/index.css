@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Light theme */
+:root {
+  --radius: 12px;
+
+  /* Base */
+  --background: 0 0% 100%;
+  --foreground: 222 47% 11%;
+
+  /* Surfaces */
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+
+  /* Your palette mappings */
+  --primary: 239 84% 60%; /* #4F46E5 indigo-600 */
+  --primary-foreground: 0 0% 100%;
+  --secondary: 160 84% 39%; /* #10B981 emerald-500 */
+  --secondary-foreground: 0 0% 100%;
+  --accent: 42 96% 56%; /* #F59E0B amber-500 */
+  --accent-foreground: 215 19% 35%; /* #1F2937 gray-800 */
+
+  --muted: 220 14% 96%; /* #F3F4F6 gray-100 */
+  --muted-foreground: 220 9% 46%; /* #6B7280 gray-500 */
+
+  --destructive: 0 84% 60%; /* #EF4444 red-500 */
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 220 13% 91%; /* #E5E7EB */
+  --input: 210 20% 98%; /* #F9FAFB */
+  --ring: 234 97% 82%; /* #C7D2FE */
+}
+
+/* Dark (optional) */
+.dark {
+  --background: 222 47% 11%;
+  --foreground: 0 0% 100%;
+  --card: 222 47% 13%;
+  --card-foreground: 0 0% 100%;
+  --popover: 222 47% 13%;
+  --popover-foreground: 0 0% 100%;
+  --primary: 239 84% 70%;
+  --secondary: 160 84% 45%;
+  --accent: 42 96% 60%;
+  --muted: 222 47% 18%;
+  --muted-foreground: 220 9% 66%;
+  --destructive: 0 84% 64%;
+  --border: 222 47% 20%;
+  --input: 222 47% 16%;
+  --ring: 239 84% 70%;
+}
+
+/* Smooth fonts */
+:root,
+.dark {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
