@@ -104,12 +104,14 @@ export default function FeesPage() {
       await loadTerms();
       await loadFees();
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (termId) {
       loadFees(termId);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [termId]);
 
   const filteredInvoices = useMemo(() => {
@@ -216,14 +218,15 @@ export default function FeesPage() {
 
   const addPayment = async () => {
     if (!payStudent || !selectedInvId || !payAmount) return;
-    const resp = await api.post("/api/fees/payments", {
+    await api.post("/api/fees/payments", {
       invoiceId: selectedInvId,
       studentId: payStudent.id,
       amount: Number(payAmount),
       method: payMethod.trim() || undefined,
       reference: payRef.trim() || undefined,
     });
-    // You could use resp.data.payment.id to email guardians here later
+    // In future you can use the response here to trigger email/WhatsApp to guardians
+
     setPayStudent(null);
     setPayStudentQuery("");
     setInvOpts([]);

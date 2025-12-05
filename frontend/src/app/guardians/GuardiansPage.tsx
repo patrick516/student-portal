@@ -310,7 +310,7 @@ export default function GuardiansPage() {
                   {guardians.length === 0 && !loading && (
                     <tr>
                       <td
-                        colspan={5 as any}
+                        colSpan={5}
                         className="py-8 text-center text-[hsl(var(--muted-foreground))]"
                       >
                         No guardians added yet.

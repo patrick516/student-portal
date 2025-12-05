@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api } from "@/api/client";
 import { useApp } from "@/app/state/useApp";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,6 +34,7 @@ export default function GradeSchemePage() {
 
   const addBand = () =>
     setBands((prev) => [...prev, { min: 0, max: 0, grade: "", points: 9 }]);
+
   const delBand = (i: number) =>
     setBands((prev) => prev.filter((_, idx) => idx !== i));
 

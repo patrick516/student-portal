@@ -40,6 +40,7 @@ type SummaryRow = {
 function isoDate(d: Date) {
   return d.toISOString().slice(0, 10);
 }
+
 function daysBack(n: number) {
   const d = new Date();
   d.setDate(d.getDate() - n);
@@ -67,14 +68,20 @@ export default function DashboardPage() {
       setLoading(false);
     }
   };
+
   useEffect(() => {
     if (user?.role !== "bursar") loadWeekly();
   }, [selectedClassId, user?.role]);
 
   const series = useMemo(() => {
     const map = new Map<string, { present: number; total: number }>();
-    for (let i = 6; i >= 0; i--)
+
+    // build 7-day window
+    for (let i = 6; i >= 0; i--) {
       map.set(isoDate(daysBack(i)), { present: 0, total: 0 });
+    }
+
+    // aggregate attendance
     for (const row of summary) {
       const key = row.date?.slice(0, 10);
       if (!map.has(key)) continue;
@@ -82,16 +89,23 @@ export default function DashboardPage() {
       ent.total += row._count._all;
       if (row.status === "present") ent.present += row._count._all;
     }
+
     return Array.from(map.entries()).map(([date, { present, total }]) => ({
       date,
       pct: total ? Math.round((present / total) * 100) : 0,
     }));
   }, [summary]);
+
   const presentAvg = useMemo(
     () =>
       series.length
         ? Math.round(series.reduce((a, b) => a + b.pct, 0) / series.length)
         : 0,
+    [series]
+  );
+
+  const lowestPct = useMemo(
+    () => (series.length ? Math.min(100, ...series.map((s) => s.pct)) : 0),
     [series]
   );
 
@@ -110,23 +124,29 @@ export default function DashboardPage() {
     ]);
     const invoices = inv.data.data || [];
     const payments = pay.data.data || [];
+
     const outstanding = invoices
       .filter((i: any) => i.status !== "paid")
-      .reduce((s: any, i: any) => s + Number(i.amount), 0);
+      .reduce((s: number, i: any) => s + Number(i.amount), 0);
+
     const paid = invoices
       .filter((i: any) => i.status === "paid")
-      .reduce((s: any, i: any) => s + Number(i.amount), 0);
+      .reduce((s: number, i: any) => s + Number(i.amount), 0);
+
     const partial = invoices
       .filter((i: any) => i.status === "partial")
-      .reduce((s: any, i: any) => s + Number(i.amount), 0);
+      .reduce((s: number, i: any) => s + Number(i.amount), 0);
+
     setInvStats({ outstanding, paid, partial });
+
     const month = new Date().toISOString().slice(0, 7);
     setPaidThisMonth(
       payments
         .filter((p: any) => (p.paidAt || "").slice(0, 7) === month)
-        .reduce((s: any, p: any) => s + Number(p.amount), 0)
+        .reduce((s: number, p: any) => s + Number(p.amount), 0)
     );
   };
+
   useEffect(() => {
     if (user?.role === "bursar") loadFees();
   }, [user?.role]);
@@ -162,13 +182,7 @@ export default function DashboardPage() {
             label="Best Day"
             value={`${Math.max(0, ...series.map((s) => s.pct))}%`}
           />
-          <Stat
-            label="Lowest Day"
-            value={`${Math.min(
-              100,
-              ...series.map((s) => (s.pct.length ? s.pct : 100))
-            )}%`}
-          />
+          <Stat label="Lowest Day" value={`${lowestPct}%`} />
           <Stat
             label="Selected Class"
             value={selectedClassId ? "Active" : "—"}
