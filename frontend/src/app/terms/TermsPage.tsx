@@ -1,5 +1,5 @@
 // frontend/src/app/terms/TermsPage.tsx
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "@/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,26 +15,39 @@ type Term = {
   isActive: boolean;
 };
 
+type TermListResponse = {
+  data: Term[];
+};
+
+type TermForm = {
+  name: string;
+  year: string;
+  startDate: string;
+  endDate: string;
+  isActive: boolean;
+};
+
+const initialForm: TermForm = {
+  name: "",
+  year: "",
+  startDate: "",
+  endDate: "",
+  isActive: false,
+};
+
 export default function TermsPage() {
   const [terms, setTerms] = useState<Term[]>([]);
-  const [form, setForm] = useState({
-    name: "",
-    year: "",
-    startDate: "",
-    endDate: "",
-    isActive: false,
-    isReadOnly: false,
-  });
+  const [form, setForm] = useState<TermForm>(initialForm);
   const [loading, setLoading] = useState(false);
 
-  const load = async () => {
-    const { data } = await api.get("/api/terms");
+  const load = useCallback(async () => {
+    const { data } = await api.get<TermListResponse>("/api/terms");
     setTerms(data.data || []);
-  };
+  }, []);
 
   useEffect(() => {
-    load();
-  }, []);
+    void load();
+  }, [load]);
 
   const createTerm = async () => {
     setLoading(true);
@@ -46,15 +59,8 @@ export default function TermsPage() {
         endDate: form.endDate,
         isActive: form.isActive,
       });
-      setForm({
-        name: "",
-        year: "",
-        startDate: "",
-        endDate: "",
-        isActive: false,
-        isReadOnly: false,
-      });
-      load();
+      setForm(initialForm);
+      void load();
     } finally {
       setLoading(false);
     }
@@ -62,16 +68,16 @@ export default function TermsPage() {
 
   const setActive = async (id: string) => {
     await api.post(`/api/terms/${id}/activate`);
-    load();
+    void load();
   };
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Terms</h1>
+      <h1 className="text-xl font-semibold tracking-tight">Terms</h1>
 
-      <Card>
+      <Card className="border-none shadow-sm bg-white/95 rounded-2xl">
         <CardHeader>
-          <CardTitle>Create Term</CardTitle>
+          <CardTitle className="text-sm font-semibold">Create Term</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 md:grid-cols-2">
@@ -79,7 +85,9 @@ export default function TermsPage() {
               <Label>Name (e.g., Term 1)</Label>
               <Input
                 value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, name: e.target.value }))
+                }
               />
             </div>
             <div className="grid gap-1.5">
@@ -87,7 +95,9 @@ export default function TermsPage() {
               <Input
                 type="number"
                 value={form.year}
-                onChange={(e) => setForm({ ...form, year: e.target.value })}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, year: e.target.value }))
+                }
               />
             </div>
             <div className="grid gap-1.5">
@@ -96,7 +106,7 @@ export default function TermsPage() {
                 type="date"
                 value={form.startDate}
                 onChange={(e) =>
-                  setForm({ ...form, startDate: e.target.value })
+                  setForm((prev) => ({ ...prev, startDate: e.target.value }))
                 }
               />
             </div>
@@ -105,16 +115,22 @@ export default function TermsPage() {
               <Input
                 type="date"
                 value={form.endDate}
-                onChange={(e) => setForm({ ...form, endDate: e.target.value })}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, endDate: e.target.value }))
+                }
               />
             </div>
             <div className="grid gap-1.5">
               <label className="inline-flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
-                  checked={form.isReadOnly} // still works
-                  onChange={
-                    (e) => setForm({ ...form, isActive: e.target.checked }) // still works
+                  className="h-4 w-4 rounded border-[hsl(var(--border))]"
+                  checked={form.isActive}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      isActive: e.target.checked,
+                    }))
                   }
                 />
                 Set as current active term
@@ -131,6 +147,7 @@ export default function TermsPage() {
                 !form.endDate ||
                 loading
               }
+              className="px-4"
             >
               {loading ? "Saving..." : "Save"}
             </Button>
@@ -138,9 +155,9 @@ export default function TermsPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="border-none shadow-sm bg-white/95 rounded-2xl">
         <CardHeader>
-          <CardTitle>All Terms</CardTitle>
+          <CardTitle className="text-sm font-semibold">All Terms</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -157,18 +174,21 @@ export default function TermsPage() {
               </thead>
               <tbody>
                 {terms.map((t) => (
-                  <tr key={t.id} className="border-b last:border-none">
+                  <tr
+                    key={t.id}
+                    className="border-b last:border-none hover:bg-[hsl(var(--muted))]/40 transition-colors"
+                  >
                     <td className="py-2 pr-3">{t.name}</td>
                     <td className="py-2 pr-3">{t.year}</td>
                     <td className="py-2 pr-3">{t.startDate.slice(0, 10)}</td>
                     <td className="py-2 pr-3">{t.endDate.slice(0, 10)}</td>
                     <td className="py-2 pr-3">
                       {t.isActive ? (
-                        <span className="text-[hsl(var(--secondary))] font-medium">
+                        <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
                           Active
                         </span>
                       ) : (
-                        <span className="text-[hsl(var(--muted-foreground))]">
+                        <span className="inline-flex items-center rounded-full bg-[hsl(var(--muted))] px-2 py-0.5 text-xs font-medium text-[hsl(var(--muted-foreground))]">
                           Inactive
                         </span>
                       )}
@@ -177,9 +197,10 @@ export default function TermsPage() {
                       <Button
                         variant="outline"
                         disabled={t.isActive}
-                        onClick={() => setActive(t.id)}
+                        onClick={() => void setActive(t.id)}
+                        className="px-3 text-xs"
                       >
-                        Set Active
+                        {t.isActive ? "Current" : "Set Active"}
                       </Button>
                     </td>
                   </tr>

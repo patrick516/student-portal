@@ -1,5 +1,5 @@
 // frontend/src/app/guardians/GuardiansPage.tsx
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "@/api/client";
 import { useApp } from "@/app/state/useApp";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,6 +24,23 @@ type Guardian = {
 
 type StudentOption = { id: string; label: string };
 
+type StudentsResponse = {
+  data: {
+    id: string;
+    student_code: string;
+    first_name: string;
+    last_name: string;
+  }[];
+};
+
+type GuardiansResponse = {
+  data: Guardian[];
+};
+
+type SendResultsResponse = {
+  recipients?: string[];
+};
+
 export default function GuardiansPage() {
   const { selectedClassId } = useApp();
   const [studentQuery, setStudentQuery] = useState("");
@@ -41,44 +58,49 @@ export default function GuardiansPage() {
     relation: "",
   });
 
-  const searchStudents = async (term: string) => {
-    if (!term.trim()) {
-      setStudentOptions([]);
-      return;
-    }
-    const { data } = await api.get("/api/students", {
-      params: { search: term, classId: selectedClassId || undefined },
-    });
-    const opts: StudentOption[] = (data.data || []).map((s: any) => ({
-      id: s.id,
-      label: `${s.student_code} • ${s.first_name} ${s.last_name}`,
-    }));
-    setStudentOptions(opts);
-  };
+  const searchStudents = useCallback(
+    async (term: string) => {
+      if (!term.trim()) {
+        setStudentOptions([]);
+        return;
+      }
+      const { data } = await api.get<StudentsResponse>("/api/students", {
+        params: { search: term, classId: selectedClassId || undefined },
+      });
+      const opts: StudentOption[] = (data.data || []).map((s) => ({
+        id: s.id,
+        label: `${s.student_code} • ${s.first_name} ${s.last_name}`,
+      }));
+      setStudentOptions(opts);
+    },
+    [selectedClassId]
+  );
 
   useEffect(() => {
-    searchStudents(studentQuery);
-  }, [studentQuery, selectedClassId]);
+    void searchStudents(studentQuery);
+  }, [studentQuery, selectedClassId, searchStudents]);
 
-  const loadGuardians = async () => {
+  const loadGuardians = useCallback(async () => {
     if (!student) {
       setGuardians([]);
       return;
     }
     setLoading(true);
     try {
-      const { data } = await api.get("/api/guardians", {
+      const { data } = await api.get<GuardiansResponse>("/api/guardians", {
         params: { studentId: student.id },
       });
       setGuardians(data.data || []);
     } finally {
       setLoading(false);
     }
-  };
+  }, [student]);
 
   useEffect(() => {
-    if (student) loadGuardians();
-  }, [student?.id]);
+    if (student) {
+      void loadGuardians();
+    }
+  }, [student, loadGuardians]);
 
   const addGuardian = async () => {
     if (!student) return;
@@ -91,7 +113,7 @@ export default function GuardiansPage() {
     });
     setForm({ name: "", email: "", phone: "", relation: "" });
     setOpenAdd(false);
-    loadGuardians();
+    void loadGuardians();
   };
 
   const updateGuardian = async (
@@ -102,13 +124,13 @@ export default function GuardiansPage() {
     await api.put(`/api/guardians/${g.id}`, {
       [field]: value || null,
     });
-    loadGuardians();
+    void loadGuardians();
   };
 
   const removeGuardian = async (g: Guardian) => {
     if (!confirm("Remove this guardian?")) return;
     await api.delete(`/api/guardians/${g.id}`);
-    loadGuardians();
+    void loadGuardians();
   };
 
   const sendResults = async () => {
@@ -117,13 +139,26 @@ export default function GuardiansPage() {
       return;
     }
     try {
-      const { data } = await api.post("/api/exams/send-results-email", {
-        classId: selectedClassId,
-        studentId: student.id,
-      });
-      alert(`Results sent to: ${(data.recipients || []).join(", ")}`);
-    } catch (e: any) {
-      alert(e?.response?.data?.error || "Failed to send results email");
+      const { data } = await api.post<SendResultsResponse>(
+        "/api/exams/send-results-email",
+        {
+          classId: selectedClassId,
+          studentId: student.id,
+        }
+      );
+      const recipients = data.recipients ?? [];
+      alert(
+        recipients.length
+          ? `Results sent to: ${recipients.join(", ")}`
+          : "Results sent (no recipients listed)."
+      );
+    } catch (error: unknown) {
+      const maybeAxiosError = error as {
+        response?: { data?: { error?: string } };
+      };
+      alert(
+        maybeAxiosError.response?.data?.error || "Failed to send results email"
+      );
     }
   };
 
@@ -231,7 +266,7 @@ export default function GuardiansPage() {
         </div>
       </div>
 
-      <Card>
+      <Card className="border-none shadow-sm bg-white/95 rounded-2xl">
         <CardHeader>
           <CardTitle>
             {student
@@ -259,7 +294,10 @@ export default function GuardiansPage() {
                 </thead>
                 <tbody>
                   {guardians.map((g) => (
-                    <tr key={g.id} className="border-b last:border-none">
+                    <tr
+                      key={g.id}
+                      className="border-b last:border-none hover:bg-[hsl(var(--muted))]/40 transition-colors"
+                    >
                       <td className="py-2 pr-3">
                         <Input
                           defaultValue={g.name}

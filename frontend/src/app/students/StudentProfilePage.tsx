@@ -164,7 +164,9 @@ export default function StudentProfilePage() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="space-y-1">
-          <h1 className="text-xl font-semibold">Student Profile</h1>
+          <h1 className="text-xl font-semibold tracking-tight">
+            Student Profile
+          </h1>
           {student && (
             <p className="text-sm text-[hsl(var(--muted-foreground))]">
               {fullName} ({student.studentCode}) •{" "}
@@ -202,34 +204,39 @@ export default function StudentProfilePage() {
         <>
           {/* Personal + Guardians */}
           <div className="grid gap-4 md:grid-cols-2">
-            <Card>
+            <Card className="border-none shadow-sm bg-white/95 rounded-2xl">
               <CardHeader>
                 <CardTitle>Personal Details</CardTitle>
               </CardHeader>
               <CardContent className="space-y-1 text-sm">
                 <div>
-                  <b>Code:</b> {student.studentCode}
+                  <span className="font-semibold">Code:</span>{" "}
+                  <span>{student.studentCode}</span>
                 </div>
                 <div>
-                  <b>Name:</b> {fullName}
+                  <span className="font-semibold">Name:</span>{" "}
+                  <span>{fullName}</span>
                 </div>
                 <div>
-                  <b>Status:</b> {student.status}
+                  <span className="font-semibold">Status:</span>{" "}
+                  <span>{student.status}</span>
                 </div>
                 <div>
-                  <b>Class:</b>{" "}
-                  {student.currentClass
-                    ? `${student.currentClass.name}${
-                        student.currentClass.stream
-                          ? " " + student.currentClass.stream
-                          : ""
-                      }`
-                    : "-"}
+                  <span className="font-semibold">Class:</span>{" "}
+                  <span>
+                    {student.currentClass
+                      ? `${student.currentClass.name}${
+                          student.currentClass.stream
+                            ? " " + student.currentClass.stream
+                            : ""
+                        }`
+                      : "-"}
+                  </span>
                 </div>
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="border-none shadow-sm bg-white/95 rounded-2xl">
               <CardHeader>
                 <CardTitle>Guardians</CardTitle>
               </CardHeader>
@@ -242,9 +249,9 @@ export default function StudentProfilePage() {
                   <ul className="space-y-1">
                     {guardians.map((g) => (
                       <li key={g.id}>
-                        <b>{g.name}</b>{" "}
+                        <span className="font-semibold">{g.name}</span>{" "}
                         {g.relation && <span>({g.relation})</span>} •{" "}
-                        {g.email || g.phone || "No contact"}
+                        <span>{g.email || g.phone || "No contact"}</span>
                       </li>
                     ))}
                   </ul>
@@ -255,7 +262,7 @@ export default function StudentProfilePage() {
 
           {/* Attendance + Fees */}
           <div className="grid gap-4 md:grid-cols-2">
-            <Card>
+            <Card className="border-none shadow-sm bg-white/95 rounded-2xl">
               <CardHeader>
                 <CardTitle>Attendance (last 30 days)</CardTitle>
               </CardHeader>
@@ -263,16 +270,20 @@ export default function StudentProfilePage() {
                 {att ? (
                   <div className="space-y-1">
                     <div>
-                      <b>Total days:</b> {att.total}
+                      <span className="font-semibold">Total days:</span>{" "}
+                      <span>{att.total}</span>
                     </div>
                     <div>
-                      <b>Present:</b> {att.present}
+                      <span className="font-semibold">Present:</span>{" "}
+                      <span>{att.present}</span>
                     </div>
                     <div>
-                      <b>Absent:</b> {att.absent}
+                      <span className="font-semibold">Absent:</span>{" "}
+                      <span>{att.absent}</span>
                     </div>
                     <div>
-                      <b>Late:</b> {att.late}
+                      <span className="font-semibold">Late:</span>{" "}
+                      <span>{att.late}</span>
                     </div>
                   </div>
                 ) : (
@@ -283,25 +294,30 @@ export default function StudentProfilePage() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="border-none shadow-sm bg-white/95 rounded-2xl">
               <CardHeader>
                 <CardTitle>Fees Status</CardTitle>
               </CardHeader>
               <CardContent className="space-y-1 text-sm">
                 <div>
-                  <b>Outstanding:</b> {outstanding.toLocaleString()}
+                  <span className="font-semibold">Outstanding:</span>{" "}
+                  <span>{outstanding.toLocaleString()}</span>
                 </div>
                 <div>
-                  <b>Invoices:</b> {invoices.length}
+                  <span className="font-semibold">Invoices:</span>{" "}
+                  <span>{invoices.length}</span>
                 </div>
                 <div>
-                  <b>Payments:</b> {payments.length}
+                  <span className="font-semibold">Payments:</span>{" "}
+                  <span>{payments.length}</span>
                 </div>
                 {lastPayment ? (
                   <div>
-                    <b>Last Payment:</b>{" "}
-                    {Number(lastPayment.amount).toLocaleString()} on{" "}
-                    {new Date(lastPayment.paidAt).toLocaleDateString()}
+                    <span className="font-semibold">Last Payment:</span>{" "}
+                    <span>
+                      {Number(lastPayment.amount).toLocaleString()} on{" "}
+                      {new Date(lastPayment.paidAt).toLocaleDateString()}
+                    </span>
                   </div>
                 ) : (
                   <div className="text-[hsl(var(--muted-foreground))]">
@@ -313,7 +329,7 @@ export default function StudentProfilePage() {
           </div>
 
           {/* Latest Exam Results */}
-          <Card>
+          <Card className="border-none shadow-sm bg-white/95 rounded-2xl">
             <CardHeader>
               <CardTitle>Latest Exam Results</CardTitle>
             </CardHeader>
@@ -333,9 +349,12 @@ export default function StudentProfilePage() {
               {classId && result && (
                 <>
                   <p className="mb-2">
-                    <b>Total Points:</b> {result.totalPoints} &nbsp; | &nbsp;
-                    <b>Total Marks:</b> {result.totalMarks} &nbsp; | &nbsp;
-                    <b>Passed:</b> {result.passed ? "Yes" : "No"}
+                    <span className="font-semibold">Total Points:</span>{" "}
+                    {result.totalPoints} &nbsp; | &nbsp;
+                    <span className="font-semibold">Total Marks:</span>{" "}
+                    {result.totalMarks} &nbsp; | &nbsp;
+                    <span className="font-semibold">Passed:</span>{" "}
+                    {result.passed ? "Yes" : "No"}
                   </p>
 
                   <div className="overflow-x-auto">
@@ -353,7 +372,7 @@ export default function StudentProfilePage() {
                         {result.subjects.map((s) => (
                           <tr
                             key={s.subjectId}
-                            className="border-b last:border-none"
+                            className="border-b last:border-none hover:bg-[hsl(var(--muted))]/40 transition-colors"
                           >
                             <td className="py-1 pr-2">
                               {s.subjectName || s.subjectId}

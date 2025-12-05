@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+// frontend/src/app/students/StudentsPage.tsx
+import { useEffect, useState, useCallback } from "react";
 import { api } from "@/api/client";
 import { useApp } from "@/app/state/useApp";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,21 +15,36 @@ type Row = {
   class_name?: string | null;
 };
 
+type StudentsResponse = {
+  data: Row[];
+};
+
 export default function StudentsPage() {
   const { selectedClassId } = useApp();
   const [rows, setRows] = useState<Row[]>([]);
   const [q, setQ] = useState("");
   const nav = useNavigate();
 
-  const load = async () => {
-    const { data } = await api.get("/api/students", {
-      params: { search: q || undefined, classId: selectedClassId || undefined },
+  // Search-triggered load (uses q + selectedClassId)
+  const load = useCallback(async () => {
+    const { data } = await api.get<StudentsResponse>("/api/students", {
+      params: {
+        search: q || undefined,
+        classId: selectedClassId || undefined,
+      },
     });
     setRows(data.data || []);
-  };
+  }, [q, selectedClassId]);
 
+  // Initial / class-change load (ignores search text)
   useEffect(() => {
-    load();
+    const fetchInitial = async () => {
+      const { data } = await api.get<StudentsResponse>("/api/students", {
+        params: { classId: selectedClassId || undefined },
+      });
+      setRows(data.data || []);
+    };
+    void fetchInitial();
   }, [selectedClassId]);
 
   const exportCSV = () => {
@@ -97,10 +113,10 @@ export default function StudentsPage() {
             placeholder="Search by name or code…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && load()}
+            onKeyDown={(e) => e.key === "Enter" && void load()}
             className="w-72"
           />
-          <Button onClick={load}>Search</Button>
+          <Button onClick={() => void load()}>Search</Button>
           <Button variant="outline" onClick={exportCSV}>
             Export CSV
           </Button>
@@ -110,7 +126,7 @@ export default function StudentsPage() {
         </div>
       </div>
 
-      <Card>
+      <Card className="border-none shadow-sm bg-white/95 rounded-2xl">
         <CardHeader>
           <CardTitle>All Students</CardTitle>
         </CardHeader>
@@ -127,7 +143,10 @@ export default function StudentsPage() {
               </thead>
               <tbody>
                 {rows.map((s) => (
-                  <tr key={s.id} className="border-b last:border-none">
+                  <tr
+                    key={s.id}
+                    className="border-b last:border-none hover:bg-[hsl(var(--muted))]/40 transition-colors"
+                  >
                     <td className="py-2 pr-3">{s.student_code}</td>
                     <td className="py-2 pr-3">
                       {s.first_name} {s.last_name}

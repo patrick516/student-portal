@@ -1,5 +1,5 @@
 // frontend/src/app/fees/FeeSettingsPage.tsx
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "@/api/client";
 import { useApp } from "@/app/state/useApp";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +16,9 @@ type FeeSetting = {
   amount: number;
 };
 
+type TermsResponse = { data: Term[] };
+type FeeSettingsResponse = { data: FeeSetting[] };
+
 export default function FeeSettingsPage() {
   const { classes } = useApp();
   const [terms, setTerms] = useState<Term[]>([]);
@@ -26,23 +29,25 @@ export default function FeeSettingsPage() {
   const [amount, setAmount] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const loadTerms = async () => {
-    const { data } = await api.get("/api/terms");
-    const list: Term[] = data.data || [];
+  const loadTerms = useCallback(async () => {
+    const { data } = await api.get<TermsResponse>("/api/terms");
+    const list = data.data || [];
     setTerms(list);
     const active = list.find((t) => t.isActive);
-    if (active && !selectedTermId) setSelectedTermId(active.id);
-  };
+    if (active && !selectedTermId) {
+      setSelectedTermId(active.id);
+    }
+  }, [selectedTermId]);
 
-  const loadFeeSettings = async () => {
-    const { data } = await api.get("/api/fee-settings");
+  const loadFeeSettings = useCallback(async () => {
+    const { data } = await api.get<FeeSettingsResponse>("/api/fee-settings");
     setFeeSettings(data.data || []);
-  };
+  }, []);
 
   useEffect(() => {
-    loadTerms();
-    loadFeeSettings();
-  }, []);
+    void loadTerms();
+    void loadFeeSettings();
+  }, [loadTerms, loadFeeSettings]);
 
   useEffect(() => {
     if (!selectedTermId || !selectedClassId) {
@@ -74,9 +79,16 @@ export default function FeeSettingsPage() {
         amount: num,
       });
       await loadFeeSettings();
-    } catch (err: any) {
-      console.error(err);
-      alert(err?.response?.data?.error || "Failed to save fee setting");
+    } catch (error: unknown) {
+      // narrow the error type without using `any`
+      const maybeAxiosError = error as {
+        response?: { data?: { error?: string } };
+      };
+
+      console.error(error);
+      alert(
+        maybeAxiosError.response?.data?.error || "Failed to save fee setting"
+      );
     } finally {
       setSaving(false);
     }
@@ -89,16 +101,16 @@ export default function FeeSettingsPage() {
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Fee Settings</h1>
 
-      <Card>
+      <Card className="border-none shadow-sm bg-white/95 rounded-2xl">
         <CardHeader>
-          <CardTitle>Set Required Fee per Term & Class</CardTitle>
+          <CardTitle>Set Required Fee per Term &amp; Class</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 md:grid-cols-3">
             <div className="grid gap-1.5">
               <Label>Term</Label>
               <select
-                className="h-10 rounded-md bg-[hsl(var(--input))] px-3 text-sm border border-[hsl(var(--border))]"
+                className="h-10 rounded-md bg-[hsl(var(--input))] px-3 text-sm border border-[hsl(var(--border))] shadow-sm"
                 value={selectedTermId}
                 onChange={(e) => setSelectedTermId(e.target.value)}
               >
@@ -115,7 +127,7 @@ export default function FeeSettingsPage() {
             <div className="grid gap-1.5">
               <Label>Class</Label>
               <select
-                className="h-10 rounded-md bg-[hsl(var(--input))] px-3 text-sm border border-[hsl(var(--border))]"
+                className="h-10 rounded-md bg-[hsl(var(--input))] px-3 text-sm border border-[hsl(var(--border))] shadow-sm"
                 value={selectedClassId}
                 onChange={(e) => setSelectedClassId(e.target.value)}
               >
@@ -142,14 +154,14 @@ export default function FeeSettingsPage() {
           </div>
 
           <div className="flex justify-end mt-4">
-            <Button onClick={onSave} disabled={saving}>
+            <Button onClick={onSave} disabled={saving} className="px-4">
               {saving ? "Saving..." : "Save"}
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="border-none shadow-sm bg-white/95 rounded-2xl">
         <CardHeader>
           <CardTitle>Configured Fees</CardTitle>
         </CardHeader>
@@ -168,7 +180,10 @@ export default function FeeSettingsPage() {
                   const term = findTerm(f.termId);
                   const klass = findClass(f.classId);
                   return (
-                    <tr key={f.id} className="border-b last:border-none">
+                    <tr
+                      key={f.id}
+                      className="border-b last:border-none hover:bg-[hsl(var(--muted))]/40 transition-colors"
+                    >
                       <td className="py-2 pr-3">
                         {term
                           ? `${term.year} • ${term.name}${

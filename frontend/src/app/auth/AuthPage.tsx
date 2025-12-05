@@ -7,6 +7,26 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 
+type LoginResponse = {
+  token: string;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    mustChangePassword?: boolean;
+  };
+};
+
+type ApiErrorShape = {
+  response?: { data?: { error?: string } };
+  message?: string;
+};
+
+type CanRegisterResponse = {
+  allowed: boolean;
+};
+
 export default function AuthPage() {
   return (
     <div className="grid min-h-screen lg:grid-cols-2 bg-background">
@@ -19,13 +39,15 @@ export default function AuthPage() {
               alt="School"
               className="w-10 h-10 rounded-lg shadow"
             />
-            <h1 className="text-2xl font-bold">Student Portal</h1>
+            <h1 className="text-2xl font-bold tracking-tight">
+              Student Portal
+            </h1>
           </div>
-          <p className="text-[hsl(var(--muted-foreground))]">
+          <p className="text-[hsl(var(--muted-foreground))] text-sm leading-relaxed">
             Manage students, classes, attendance, fees and exams with a modern,
             role-based school management system.
           </p>
-          <ul className="text-sm text-[hsl(var(--muted-foreground))] list-disc ml-5 space-y-1">
+          <ul className="text-sm text-[hsl(var(--muted-foreground))] list-disc ml-5 space-y-1.5">
             <li>Head Teacher: manage users, classes and results</li>
             <li>Teachers: manage subjects, attendance and marks</li>
             <li>Bursar: manage fees, invoices and debtors</li>
@@ -35,7 +57,7 @@ export default function AuthPage() {
 
       {/* Right panel */}
       <div className="flex items-center justify-center p-6">
-        <Card className="w-full max-w-md shadow-lg">
+        <Card className="w-full max-w-md border-none shadow-lg rounded-2xl bg-white/95">
           <CardHeader>
             <div className="flex items-center gap-3">
               <img
@@ -43,7 +65,12 @@ export default function AuthPage() {
                 alt="School"
                 className="w-8 h-8 rounded-lg"
               />
-              <CardTitle className="text-xl">Sign in</CardTitle>
+              <div>
+                <CardTitle className="text-xl">Sign in</CardTitle>
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                  Use your school account to access the portal.
+                </p>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -68,17 +95,11 @@ function LoginForm() {
     setLoading(true);
 
     try {
-      const res = await api.post("/api/auth/login", { email, password });
-      const data = res.data as {
-        token: string;
-        user: {
-          id: string;
-          name: string;
-          email: string;
-          role: string;
-          mustChangePassword?: boolean;
-        };
-      };
+      const res = await api.post<LoginResponse>("/api/auth/login", {
+        email,
+        password,
+      });
+      const data = res.data;
 
       localStorage.setItem("token", data.token);
       localStorage.setItem("user", JSON.stringify(data.user));
@@ -88,10 +109,11 @@ function LoginForm() {
       } else {
         nav("/app", { replace: true });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const error = err as ApiErrorShape;
       const msg =
-        err?.response?.data?.error ||
-        (err?.message?.includes("Network")
+        error.response?.data?.error ||
+        (error.message && error.message.includes("Network")
           ? "Cannot reach server"
           : "Login failed");
       setError(msg);
@@ -104,7 +126,9 @@ function LoginForm() {
     setError(null);
     setLoading(true);
     try {
-      const res = await api.get("/api/auth/can-register-first");
+      const res = await api.get<CanRegisterResponse>(
+        "/api/auth/can-register-first"
+      );
       if (res.data?.allowed) {
         nav("/auth/register-headteacher");
       } else {
@@ -112,10 +136,11 @@ function LoginForm() {
           "Headteacher already registered. Please ask them to create your account."
         );
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const error = err as ApiErrorShape;
       const msg =
-        err?.response?.data?.error ||
-        (err?.message?.includes("Network")
+        error.response?.data?.error ||
+        (error.message && error.message.includes("Network")
           ? "Cannot reach server"
           : "Could not check registration status.");
       setError(msg);
@@ -152,7 +177,9 @@ function LoginForm() {
       </div>
 
       {error && (
-        <div className="text-sm text-[hsl(var(--destructive))]">{error}</div>
+        <div className="rounded-md border border-[hsl(var(--destructive))]/40 bg-[hsl(var(--destructive))]/5 px-3 py-2 text-sm text-[hsl(var(--destructive))]">
+          {error}
+        </div>
       )}
 
       <Button type="submit" disabled={loading} className="w-full">

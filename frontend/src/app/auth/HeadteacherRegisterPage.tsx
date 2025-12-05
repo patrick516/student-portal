@@ -1,11 +1,30 @@
-import { useEffect, useState } from "react";
-import type { FormEvent } from "react";
+// frontend/src/app/auth/HeadteacherRegisterPage.tsx
+import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+
+type CanRegisterResponse = {
+  allowed: boolean;
+};
+
+type RegisterResponse = {
+  token: string;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    mustChangePassword?: boolean;
+  };
+};
+
+type ApiErrorShape = {
+  response?: { data?: { error?: string } };
+};
 
 export default function HeadteacherRegisterPage() {
   const nav = useNavigate();
@@ -19,9 +38,11 @@ export default function HeadteacherRegisterPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    (async () => {
+    void (async () => {
       try {
-        const res = await api.get("/api/auth/can-register-first");
+        const res = await api.get<CanRegisterResponse>(
+          "/api/auth/can-register-first"
+        );
         setAllowed(res.data?.allowed);
       } catch {
         setAllowed(false);
@@ -34,28 +55,23 @@ export default function HeadteacherRegisterPage() {
     setError(null);
     setLoading(true);
     try {
-      const res = await api.post("/api/auth/register-headteacher", {
-        firstName,
-        lastName,
-        email,
-        phone,
-        password,
-      });
-      const data = res.data as {
-        token: string;
-        user: {
-          id: string;
-          name: string;
-          email: string;
-          role: string;
-          mustChangePassword?: boolean;
-        };
-      };
+      const res = await api.post<RegisterResponse>(
+        "/api/auth/register-headteacher",
+        {
+          firstName,
+          lastName,
+          email,
+          phone,
+          password,
+        }
+      );
+      const data = res.data;
       localStorage.setItem("token", data.token);
       localStorage.setItem("user", JSON.stringify(data.user));
       nav("/app", { replace: true });
-    } catch (err: any) {
-      setError(err?.response?.data?.error || "Registration failed");
+    } catch (err: unknown) {
+      const error = err as ApiErrorShape;
+      setError(error.response?.data?.error || "Registration failed");
     } finally {
       setLoading(false);
     }
@@ -74,7 +90,7 @@ export default function HeadteacherRegisterPage() {
   if (!allowed) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
-        <Card className="w-full max-w-md shadow-lg">
+        <Card className="w-full max-w-md border-none shadow-lg rounded-2xl bg-white/95">
           <CardHeader>
             <CardTitle className="text-xl">
               Headteacher already registered
@@ -98,7 +114,7 @@ export default function HeadteacherRegisterPage() {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-background">
-      <Card className="w-full max-w-md shadow-lg">
+      <Card className="w-full max-w-md border-none shadow-lg rounded-2xl bg-white/95">
         <CardHeader>
           <CardTitle className="text-xl">Headteacher Registration</CardTitle>
         </CardHeader>
@@ -110,6 +126,7 @@ export default function HeadteacherRegisterPage() {
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
                 required
+                disabled={loading}
               />
             </div>
             <div className="grid gap-1.5">
@@ -118,6 +135,7 @@ export default function HeadteacherRegisterPage() {
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
                 required
+                disabled={loading}
               />
             </div>
             <div className="grid gap-1.5">
@@ -127,11 +145,16 @@ export default function HeadteacherRegisterPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                disabled={loading}
               />
             </div>
             <div className="grid gap-1.5">
               <Label>Phone (optional)</Label>
-              <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
+              <Input
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                disabled={loading}
+              />
             </div>
             <div className="grid gap-1.5">
               <Label>Password</Label>
@@ -140,6 +163,7 @@ export default function HeadteacherRegisterPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                disabled={loading}
               />
             </div>
             {error && (

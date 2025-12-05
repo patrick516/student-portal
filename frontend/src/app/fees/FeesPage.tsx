@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/api/client";
 import { useApp } from "@/app/state/useApp";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,6 +36,25 @@ type StudentOpt = { id: string; label: string };
 
 type Term = { id: string; name: string; year: number; isActive: boolean };
 
+type TermsResponse = { data: Term[] };
+type InvoicesResponse = { data: Invoice[]; termId?: string | null };
+type PaymentsResponse = { data: Payment[] };
+
+type StudentApi = {
+  id: string;
+  student_code: string;
+  first_name: string;
+  last_name: string;
+};
+type StudentsResponse = { data: StudentApi[] };
+
+type InvoiceByStudent = {
+  id: string;
+  status: "unpaid" | "partial" | "paid" | string;
+  amount: number | string;
+};
+type InvoicesByStudentResponse = { data: InvoiceByStudent[] };
+
 export default function FeesPage() {
   const { selectedClassId } = useApp();
 
@@ -62,57 +81,60 @@ export default function FeesPage() {
   const [payStudentQuery, setPayStudentQuery] = useState("");
   const [payStudOpts, setPayStudOpts] = useState<StudentOpt[]>([]);
   const [payStudent, setPayStudent] = useState<StudentOpt | null>(null);
-  const [invOpts, setInvOpts] = useState<{ id: string; label: string }[]>([]);
+  const [invOpts, setInvOpts] = useState<
+    { id: string; label: string; amount: number }[]
+  >([]);
   const [selectedInvId, setSelectedInvId] = useState("");
   const [payAmount, setPayAmount] = useState("");
   const [payMethod, setPayMethod] = useState("");
   const [payRef, setPayRef] = useState("");
 
   // ---------- load terms + fees ----------
-  const loadTerms = async () => {
-    const { data } = await api.get("/api/terms");
-    const list: Term[] = data.data || [];
+  const loadTerms = useCallback(async () => {
+    const { data } = await api.get<TermsResponse>("/api/terms");
+    const list = data.data || [];
     setTerms(list);
     const active = list.find((t) => t.isActive);
     if (active && !termId) setTermId(active.id);
-  };
+  }, [termId]);
 
-  const loadFees = async (tId?: string) => {
-    setLoading(true);
-    try {
-      const termParam = tId || termId || undefined;
-      const [inv, pay] = await Promise.all([
-        api.get("/api/fees/invoices", {
-          params: { termId: termParam, studentId: undefined },
-        }),
-        api.get("/api/fees/payments", {
-          params: { termId: termParam, studentId: undefined },
-        }),
-      ]);
-      setInvoices(inv.data.data || []);
-      setPayments(pay.data.data || []);
-      if (!termId && inv.data.termId) {
-        setTermId(inv.data.termId);
+  const loadFees = useCallback(
+    async (overrideTermId?: string) => {
+      setLoading(true);
+      try {
+        const termParam = overrideTermId || termId || undefined;
+        const [inv, pay] = await Promise.all([
+          api.get<InvoicesResponse>("/api/fees/invoices", {
+            params: { termId: termParam, studentId: undefined },
+          }),
+          api.get<PaymentsResponse>("/api/fees/payments", {
+            params: { termId: termParam, studentId: undefined },
+          }),
+        ]);
+        setInvoices(inv.data.data || []);
+        setPayments(pay.data.data || []);
+        if (!termId && inv.data.termId) {
+          setTermId(inv.data.termId || "");
+        }
+      } finally {
+        setLoading(false);
       }
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+    [termId]
+  );
 
   useEffect(() => {
-    (async () => {
+    void (async () => {
       await loadTerms();
       await loadFees();
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadTerms, loadFees]);
 
   useEffect(() => {
     if (termId) {
-      loadFees(termId);
+      void loadFees(termId);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [termId]);
+  }, [termId, loadFees]);
 
   const filteredInvoices = useMemo(() => {
     const s = q.toLowerCase();
@@ -133,68 +155,79 @@ export default function FeesPage() {
   }, [payments, q]);
 
   // ---------- class-aware student search ----------
-  const searchStudents = async (
-    term: string,
-    setter: (opts: StudentOpt[]) => void
-  ) => {
-    if (!selectedClassId) {
-      setter([]);
-      return;
-    }
-    const { data } = await api.get("/api/students", {
-      params: { search: term, classId: selectedClassId },
-    });
-    const opts: StudentOpt[] = (data.data || []).map((s: any) => ({
-      id: s.id,
-      label: `${s.student_code} • ${s.first_name} ${s.last_name}`,
-    }));
-    setter(opts);
-  };
+  const searchStudents = useCallback(
+    async (term: string, setter: (opts: StudentOpt[]) => void) => {
+      if (!selectedClassId) {
+        setter([]);
+        return;
+      }
+      const { data } = await api.get<StudentsResponse>("/api/students", {
+        params: { search: term, classId: selectedClassId },
+      });
+      const opts: StudentOpt[] = (data.data || []).map((s) => ({
+        id: s.id,
+        label: `${s.student_code} • ${s.first_name} ${s.last_name}`,
+      }));
+      setter(opts);
+    },
+    [selectedClassId]
+  );
 
   // Add invoice: search
   useEffect(() => {
     if (openInv && studQuery.trim().length >= 1) {
-      searchStudents(studQuery, setStudOpts);
+      void searchStudents(studQuery, setStudOpts);
     } else {
       setStudOpts([]);
     }
-  }, [studQuery, openInv, selectedClassId]);
+  }, [studQuery, openInv, selectedClassId, searchStudents]);
 
   // Record payment: search
   useEffect(() => {
     if (openPay && payStudentQuery.trim().length >= 1) {
-      searchStudents(payStudentQuery, setPayStudOpts);
+      void searchStudents(payStudentQuery, setPayStudOpts);
     } else {
       setPayStudOpts([]);
     }
-  }, [payStudentQuery, openPay, selectedClassId]);
+  }, [payStudentQuery, openPay, selectedClassId, searchStudents]);
 
   // Load invoices for selected payStudent (for this term)
   useEffect(() => {
-    (async () => {
+    const loadInvoicesForStudent = async () => {
       if (!payStudent) {
         setInvOpts([]);
         setSelectedInvId("");
         return;
       }
-      const { data } = await api.get("/api/fees/invoices", {
-        params: {
-          studentId: payStudent.id,
-          termId: termId || undefined,
-        },
-      });
-      const opts = (data.data || []).map((i: any) => ({
-        id: i.id,
-        label: `${i.id.slice(0, 8)} • ${i.status.toUpperCase()} • ${Number(
-          i.amount
-        ).toLocaleString()}`,
-      }));
+      const { data } = await api.get<InvoicesByStudentResponse>(
+        "/api/fees/invoices",
+        {
+          params: {
+            studentId: payStudent.id,
+            termId: termId || undefined,
+          },
+        }
+      );
+      const opts =
+        (data.data || []).map((i) => ({
+          id: i.id,
+          label: `${i.id.slice(0, 8)} • ${i.status.toUpperCase()} • ${Number(
+            i.amount
+          ).toLocaleString()}`,
+          amount: Number(i.amount),
+        })) ?? [];
+
       setInvOpts(opts);
       if (opts[0]) {
         setSelectedInvId(opts[0].id);
         setPayAmount(String(opts[0].amount));
+      } else {
+        setSelectedInvId("");
+        setPayAmount("");
       }
-    })();
+    };
+
+    void loadInvoicesForStudent();
   }, [payStudent, termId]);
 
   // ---------- actions ----------
@@ -213,7 +246,7 @@ export default function FeesPage() {
     setStudQuery("");
     setAmount("");
     setOpenInv(false);
-    loadFees();
+    void loadFees();
   };
 
   const addPayment = async () => {
@@ -235,14 +268,14 @@ export default function FeesPage() {
     setPayMethod("");
     setPayRef("");
     setOpenPay(false);
-    loadFees();
+    void loadFees();
   };
 
   const printReceipt = async (paymentId: string) => {
     const { data } = await api.get(`/api/fees/payments/${paymentId}/receipt`);
     const r = data?.data;
     const w = window.open("", "_blank");
-    if (!w) return;
+    if (!w || !r) return;
     w.document.write(`
       <html><head><title>Receipt ${r.receiptId}</title>
       <style>
@@ -293,7 +326,7 @@ export default function FeesPage() {
         <div className="flex items-center gap-2">
           {/* Term selector */}
           <select
-            className="h-9 rounded-md bg-[hsl(var(--input))] px-3 text-sm border border-[hsl(var(--border))]"
+            className="h-9 rounded-md bg-[hsl(var(--input))] px-3 text-sm border border-[hsl(var(--border))] shadow-sm"
             value={termId}
             onChange={(e) => setTermId(e.target.value)}
           >
@@ -490,7 +523,7 @@ export default function FeesPage() {
       </div>
 
       {/* Invoices list */}
-      <Card>
+      <Card className="border-none shadow-sm bg-white/95 rounded-2xl">
         <CardHeader>
           <CardTitle>
             Invoices{" "}
@@ -513,7 +546,10 @@ export default function FeesPage() {
               </thead>
               <tbody>
                 {filteredInvoices.map((i) => (
-                  <tr key={i.id} className="border-b last:border-none">
+                  <tr
+                    key={i.id}
+                    className="border-b last:border-none hover:bg-[hsl(var(--muted))]/40 transition-colors"
+                  >
                     <td className="py-2 pr-3">{i.id}</td>
                     <td className="py-2 pr-3">{i.studentId}</td>
                     <td className="py-2 pr-3">
@@ -542,7 +578,7 @@ export default function FeesPage() {
       </Card>
 
       {/* Payments list */}
-      <Card>
+      <Card className="border-none shadow-sm bg-white/95 rounded-2xl">
         <CardHeader>
           <CardTitle>Payments</CardTitle>
         </CardHeader>
@@ -563,7 +599,10 @@ export default function FeesPage() {
               </thead>
               <tbody>
                 {filteredPayments.map((p) => (
-                  <tr key={p.id} className="border-b last:border-none">
+                  <tr
+                    key={p.id}
+                    className="border-b last:border-none hover:bg-[hsl(var(--muted))]/40 transition-colors"
+                  >
                     <td className="py-2 pr-3">{p.id}</td>
                     <td className="py-2 pr-3">{p.invoiceId}</td>
                     <td className="py-2 pr-3">{p.studentId}</td>

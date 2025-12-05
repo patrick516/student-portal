@@ -1,5 +1,5 @@
 // frontend/src/app/classes/ClassesPage.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,12 @@ type SummaryItem = {
   subjects: { id: string; name: string; code?: string | null }[];
 };
 
+type ClassesResponse = { data: Klass[] };
+type UsersResponse = {
+  data: { id: string; name: string; email: string }[];
+};
+type SummaryResponse = { data: SummaryItem[] };
+
 export default function ClassesPage() {
   const [rows, setRows] = useState<Klass[]>([]);
   const [q, setQ] = useState("");
@@ -41,27 +47,27 @@ export default function ClassesPage() {
 
   const [summary, setSummary] = useState<Record<string, SummaryItem[]>>({});
 
-  const loadClasses = async () => {
-    const { data } = await api.get("/api/classes");
+  const loadClasses = useCallback(async () => {
+    const { data } = await api.get<ClassesResponse>("/api/classes");
     setRows(data.data || []);
-  };
+  }, []);
 
-  const loadTeachers = async () => {
-    const { data } = await api.get("/api/users", {
+  const loadTeachers = useCallback(async () => {
+    const { data } = await api.get<UsersResponse>("/api/users", {
       params: { role: "teacher" },
     });
-    const list: TeacherOpt[] = (data.data || []).map((u: any) => ({
+    const list: TeacherOpt[] = (data.data || []).map((u) => ({
       id: u.id,
       name: u.name,
       email: u.email,
     }));
     setTeachers(list);
-  };
+  }, []);
 
   useEffect(() => {
-    loadClasses();
-    loadTeachers();
-  }, []);
+    void loadClasses();
+    void loadTeachers();
+  }, [loadClasses, loadTeachers]);
 
   const filtered = useMemo(() => {
     const s = q.toLowerCase();
@@ -85,7 +91,7 @@ export default function ClassesPage() {
     await api.post("/api/classes", payload);
     setNewForm({ name: "", stream: "", year: "" });
     setOpenNew(false);
-    loadClasses();
+    void loadClasses();
   };
 
   const openSetFormTeacher = (classId: string) => {
@@ -104,11 +110,13 @@ export default function ClassesPage() {
       teacherId: selectedTeacherId,
     });
     setOpenSetFT(null);
-    loadClasses();
+    void loadClasses();
   };
 
   const refreshSummary = async (classId: string) => {
-    const { data } = await api.get(`/api/classes/${classId}/summary`);
+    const { data } = await api.get<SummaryResponse>(
+      `/api/classes/${classId}/summary`
+    );
     setSummary((prev) => ({ ...prev, [classId]: data.data || [] }));
   };
 
@@ -179,7 +187,7 @@ export default function ClassesPage() {
       </div>
 
       {/* Classes table */}
-      <Card>
+      <Card className="border-none shadow-sm bg-white/95 rounded-2xl">
         <CardHeader>
           <CardTitle>All Classes</CardTitle>
         </CardHeader>
@@ -191,7 +199,7 @@ export default function ClassesPage() {
                   <th className="py-2 pr-3">Class</th>
                   <th className="py-2 pr-3">Year</th>
                   <th className="py-2 pr-3">Form Teacher</th>
-                  <th className="py-2 pr-3">Teachers & Subjects</th>
+                  <th className="py-2 pr-3">Teachers &amp; Subjects</th>
                   <th className="py-2 pr-3">Actions</th>
                 </tr>
               </thead>
@@ -199,7 +207,7 @@ export default function ClassesPage() {
                 {filtered.map((c) => (
                   <tr
                     key={c.id}
-                    className="border-b last:border-none align-top"
+                    className="border-b last:border-none align-top hover:bg-[hsl(var(--muted))]/40 transition-colors"
                   >
                     <td className="py-2 pr-3">
                       {c.name}
@@ -217,7 +225,7 @@ export default function ClassesPage() {
                       ) : (
                         (summary[c.id] || []).map((item, idx) => (
                           <div key={idx} className="mb-2">
-                            <div className="font-medium text-sm">
+                            <div className="text-sm font-medium">
                               {item.teacher.name}
                             </div>
                             <div className="flex flex-wrap gap-1 mt-1">
@@ -244,7 +252,7 @@ export default function ClassesPage() {
                         </Button>
                         <Button
                           variant="outline"
-                          onClick={() => refreshSummary(c.id)}
+                          onClick={() => void refreshSummary(c.id)}
                         >
                           Refresh Summary
                         </Button>

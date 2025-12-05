@@ -13,16 +13,16 @@ function Stat({
   hint?: string;
 }) {
   return (
-    <Card>
+    <Card className="border-none shadow-sm bg-white/95 rounded-2xl">
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm text-[hsl(var(--muted-foreground))]">
+        <CardTitle className="text-xs font-medium tracking-wide text-[hsl(var(--muted-foreground))] uppercase">
           {label}
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-semibold">{value}</div>
+        <div className="text-2xl font-semibold tracking-tight">{value}</div>
         {hint && (
-          <div className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+          <div className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
             {hint}
           </div>
         )}
@@ -35,6 +35,16 @@ type SummaryRow = {
   date: string;
   status: "present" | "absent" | "late";
   _count: { _all: number };
+};
+
+type InvoiceSummary = {
+  status: "paid" | "partial" | "unpaid" | string;
+  amount: number | string;
+};
+
+type PaymentSummary = {
+  paidAt?: string | null;
+  amount: number | string;
 };
 
 function isoDate(d: Date) {
@@ -53,25 +63,27 @@ export default function DashboardPage() {
   // weekly attendance series (teacher/admin)
   const [summary, setSummary] = useState<SummaryRow[]>([]);
   const [loading, setLoading] = useState(false);
+
   const to = isoDate(new Date());
   const from = isoDate(daysBack(6));
 
-  const loadWeekly = async () => {
-    if (!selectedClassId) return;
-    setLoading(true);
-    try {
-      const { data } = await api.get("/api/attendance/summary", {
-        params: { classId: selectedClassId, from, to },
-      });
-      setSummary((data?.data as SummaryRow[]) || []);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    if (user?.role !== "bursar") loadWeekly();
-  }, [selectedClassId, user?.role]);
+    if (!selectedClassId || user?.role === "bursar") return;
+
+    const loadWeekly = async () => {
+      setLoading(true);
+      try {
+        const { data } = await api.get("/api/attendance/summary", {
+          params: { classId: selectedClassId, from, to },
+        });
+        setSummary((data?.data as SummaryRow[]) || []);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void loadWeekly();
+  }, [selectedClassId, user?.role, from, to]);
 
   const series = useMemo(() => {
     const map = new Map<string, { present: number; total: number }>();
@@ -109,7 +121,7 @@ export default function DashboardPage() {
     [series]
   );
 
-  // bursar stats (very light: from invoices/payments)
+  // bursar stats (from invoices/payments)
   const [invStats, setInvStats] = useState<{
     outstanding: number;
     paid: number;
@@ -117,42 +129,50 @@ export default function DashboardPage() {
   }>({ outstanding: 0, paid: 0, partial: 0 });
   const [paidThisMonth, setPaidThisMonth] = useState<number>(0);
 
-  const loadFees = async () => {
-    const [inv, pay] = await Promise.all([
-      api.get("/api/fees/invoices"),
-      api.get("/api/fees/payments"),
-    ]);
-    const invoices = inv.data.data || [];
-    const payments = pay.data.data || [];
-
-    const outstanding = invoices
-      .filter((i: any) => i.status !== "paid")
-      .reduce((s: number, i: any) => s + Number(i.amount), 0);
-
-    const paid = invoices
-      .filter((i: any) => i.status === "paid")
-      .reduce((s: number, i: any) => s + Number(i.amount), 0);
-
-    const partial = invoices
-      .filter((i: any) => i.status === "partial")
-      .reduce((s: number, i: any) => s + Number(i.amount), 0);
-
-    setInvStats({ outstanding, paid, partial });
-
-    const month = new Date().toISOString().slice(0, 7);
-    setPaidThisMonth(
-      payments
-        .filter((p: any) => (p.paidAt || "").slice(0, 7) === month)
-        .reduce((s: number, p: any) => s + Number(p.amount), 0)
-    );
-  };
-
   useEffect(() => {
-    if (user?.role === "bursar") loadFees();
+    if (user?.role !== "bursar") return;
+
+    const loadFees = async () => {
+      const [invResponse, payResponse] = await Promise.all([
+        api.get("/api/fees/invoices"),
+        api.get("/api/fees/payments"),
+      ]);
+
+      const invoices = (invResponse.data?.data ?? []) as InvoiceSummary[];
+      const payments = (payResponse.data?.data ?? []) as PaymentSummary[];
+
+      const sumAmount = (values: Array<{ amount: number | string }>) =>
+        values.reduce((sum, item) => sum + Number(item.amount), 0);
+
+      const outstandingInvoices = invoices.filter(
+        (invoice) => invoice.status !== "paid"
+      );
+      const paidInvoices = invoices.filter(
+        (invoice) => invoice.status === "paid"
+      );
+      const partialInvoices = invoices.filter(
+        (invoice) => invoice.status === "partial"
+      );
+
+      setInvStats({
+        outstanding: sumAmount(outstandingInvoices),
+        paid: sumAmount(paidInvoices),
+        partial: sumAmount(partialInvoices),
+      });
+
+      const month = new Date().toISOString().slice(0, 7);
+      const paidThisMonthTotal = payments
+        .filter((payment) => (payment.paidAt ?? "").slice(0, 7) === month)
+        .reduce((sum, payment) => sum + Number(payment.amount), 0);
+
+      setPaidThisMonth(paidThisMonthTotal);
+    };
+
+    void loadFees();
   }, [user?.role]);
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-6xl mx-auto space-y-6">
       {/* Role-aware stat row */}
       {user?.role === "bursar" ? (
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -192,12 +212,12 @@ export default function DashboardPage() {
 
       {/* Weekly bar (hide for bursar) */}
       {user?.role !== "bursar" && (
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              Attendance – Last 7 days{" "}
+        <Card className="border-none shadow-sm bg-white/95 rounded-2xl">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center justify-between text-sm font-semibold">
+              <span>Attendance – Last 7 days</span>
               {loading && (
-                <span className="text-sm text-[hsl(var(--muted-foreground))]">
+                <span className="text-xs font-normal text-[hsl(var(--muted-foreground))]">
                   Loading…
                 </span>
               )}
@@ -208,8 +228,8 @@ export default function DashboardPage() {
               {series.map((s) => (
                 <div key={s.date} className="flex flex-col items-center gap-2">
                   <div
-                    className="w-8 rounded-md bg-[hsl(var(--ring))]"
-                    style={{ height: `${s.pct || 2}%` }}
+                    className="w-7 rounded-xl bg-[hsl(var(--ring))] shadow-sm transition hover:opacity-90"
+                    style={{ height: `${s.pct || 3}%` }}
                     title={`${s.pct}%`}
                   />
                   <div className="text-[10px] text-[hsl(var(--muted-foreground))]">
@@ -223,14 +243,25 @@ export default function DashboardPage() {
       )}
 
       {/* Recent activity placeholder */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Activity</CardTitle>
+      <Card className="border-none shadow-sm bg-white/95 rounded-2xl">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-semibold">
+            Recent Activity
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-[hsl(var(--muted-foreground))]">
-          <div>✔️ Attendance updated</div>
-          <div>➕ Teacher added</div>
-          <div>💳 Payment recorded</div>
+          <div className="flex items-center gap-2">
+            <span>✔️</span>
+            <span>Attendance updated</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span>➕</span>
+            <span>Teacher added</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span>💳</span>
+            <span>Payment recorded</span>
+          </div>
         </CardContent>
       </Card>
     </div>
