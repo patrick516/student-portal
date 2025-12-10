@@ -251,20 +251,35 @@ export default function StudentsPage() {
     setStudentSubjects([]);
 
     try {
-      // 1) Student + class
       const sRes = await api.get(`/api/students/${id}`);
-      const s: StudentDetail = sRes.data.data;
-      setFullStudent(s);
+      const raw = sRes.data.data;
 
-      // 2) Guardians
+      // Map backend shape (currentClass) into the "class" field we use in the modal
+      const mapped: any = {
+        ...(selected || {}), // keep table row info as fallback
+        ...raw,
+        class: raw.currentClass
+          ? {
+              id: raw.currentClass.id,
+              name: raw.currentClass.name,
+              stream: raw.currentClass.stream,
+              year: raw.currentClass.year,
+            }
+          : selected?.class || null,
+      };
+
+      setFullStudent(mapped);
+
       const gRes = await api.get("/api/guardians", {
         params: { studentId: id },
       });
       setGuardians(gRes.data.data || []);
 
-      // 3) Subjects via latest class results (same logic as StudentProfilePage)
-      if (s.class?.id) {
-        const rRes = await api.get(`/api/exams/results/class/${s.class.id}`);
+      // 3) Subjects via latest class results
+      if (mapped.class?.id) {
+        const rRes = await api.get(
+          `/api/exams/results/class/${mapped.class.id}`
+        );
         const rows: ResultRow[] = rRes.data.data || [];
         const row = rows.find((r) => r.studentId === id);
         setStudentSubjects(row?.subjects || []);
