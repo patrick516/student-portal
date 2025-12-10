@@ -12,4 +12,12 @@ router.put("/:id", ctrl.update);
 
 router.post("/:id/resend-invite", ctrl.resendInvite);
 // ...
+
+router.get("/:id/classes", ctrl.getClasses);
+router.put("/:id/classes", ctrl.setClasses);
+
+// Teacher subject × class assignments
+router.get("/:id/assignments", ctrl.getAssignments);
+router.put("/:id/assignments", ctrl.setAssignments);
+
 module.exports = router;

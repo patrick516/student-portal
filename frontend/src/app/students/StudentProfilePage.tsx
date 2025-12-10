@@ -27,12 +27,14 @@ type Guardian = {
   phone?: string | null;
   relation?: string | null;
 };
+
 type AttendanceSummary = {
   present: number;
   absent: number;
   late: number;
   total: number;
 };
+
 type Invoice = { id: string; amount: number; status: string; issuedAt: string };
 type Payment = { id: string; amount: number; paidAt: string };
 
@@ -204,7 +206,7 @@ export default function StudentProfilePage() {
         <>
           {/* Personal + Guardians */}
           <div className="grid gap-4 md:grid-cols-2">
-            <Card className="border-none shadow-sm bg-white/95 rounded-2xl">
+            <Card className="border-none shadow-sm bg:white/95 bg-white/95 rounded-2xl">
               <CardHeader>
                 <CardTitle>Personal Details</CardTitle>
               </CardHeader>

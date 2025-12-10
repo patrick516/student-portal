@@ -25,6 +25,25 @@ model School {
   guardians    Guardian[]
   terms        Term[]
   feeSettings  FeeSetting[]
+
+  auditLogs AuditLog[]
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  schoolId  String
+  userId    String?
+  action    String
+  resource  String
+  targetId  String?
+  meta      Json?
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  school School @relation(fields: [schoolId], references: [id])
+
+  @@index([schoolId, createdAt])
 }
 
 model Term {

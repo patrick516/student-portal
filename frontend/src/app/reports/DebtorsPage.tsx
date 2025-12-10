@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+// frontend/src/app/reports/DebtorsPage.tsx (or wherever it lives)
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/api/client";
 import { useApp } from "@/app/state/useApp";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,7 +20,21 @@ type Row = {
 };
 
 type StudentOpt = { id: string; label: string };
+
 type Term = { id: string; name: string; year: number; isActive: boolean };
+
+type TermsResponse = { data: Term[] };
+
+type DebtorsResponse = { data: Row[] };
+
+type StudentsResponse = {
+  data: {
+    id: string;
+    student_code: string;
+    first_name: string;
+    last_name: string;
+  }[];
+};
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -41,53 +56,79 @@ export default function DebtorsPage() {
   const [studOpts, setStudOpts] = useState<StudentOpt[]>([]);
   const [student, setStudent] = useState<StudentOpt | null>(null);
 
-  const loadTerms = async () => {
-    const { data } = await api.get("/api/terms");
+  const loadTerms = useCallback(async () => {
+    const { data } = await api.get<TermsResponse>("/api/terms");
     const list: Term[] = data.data || [];
     setTerms(list);
     const active = list.find((t) => t.isActive);
     if (active && !termId) setTermId(active.id);
-  };
+  }, [termId]);
 
-  const searchStudents = async (term: string) => {
-    const params: any = { search: term };
-    if (selectedClassId) params.classId = selectedClassId;
-    const { data } = await api.get("/api/students", { params });
-    const opts: StudentOpt[] = (data.data || []).map((s: any) => ({
-      id: s.id,
-      label: `${s.student_code} • ${s.first_name} ${s.last_name}`,
-    }));
-    setStudOpts(opts);
-  };
+  const searchStudents = useCallback(
+    async (searchTerm: string) => {
+      if (!searchTerm.trim()) {
+        setStudOpts([]);
+        return;
+      }
+
+      const params: { search: string; classId?: string } = {
+        search: searchTerm,
+      };
+
+      if (selectedClassId) {
+        params.classId = selectedClassId;
+      }
+
+      const { data } = await api.get<StudentsResponse>("/api/students", {
+        params,
+      });
+
+      const opts: StudentOpt[] = (data.data || []).map((s) => ({
+        id: s.id,
+        label: `${s.student_code} • ${s.first_name} ${s.last_name}`,
+      }));
+      setStudOpts(opts);
+    },
+    [selectedClassId]
+  );
 
   useEffect(() => {
-    loadTerms();
-  }, []);
+    void loadTerms();
+  }, [loadTerms]);
 
   useEffect(() => {
-    if (studQuery.trim()) searchStudents(studQuery);
-    else setStudOpts([]);
-  }, [studQuery, selectedClassId]);
-
-  const load = async (tId?: string) => {
-    setLoading(true);
-    try {
-      const params: Record<string, string> = { asOf };
-      if (selectedClassId) params.classId = selectedClassId;
-      if (student) params.studentId = student.id;
-      const effectiveTerm = tId || termId;
-      if (effectiveTerm) params.termId = effectiveTerm;
-
-      const { data } = await api.get("/api/reports/debtors", { params });
-      setRows((data?.data as Row[]) || []);
-    } finally {
-      setLoading(false);
+    if (studQuery.trim()) {
+      void searchStudents(studQuery);
+    } else {
+      setStudOpts([]);
     }
-  };
+  }, [studQuery, selectedClassId, searchStudents]);
+
+  const load = useCallback(
+    async (overrideTermId?: string) => {
+      setLoading(true);
+      try {
+        const params: Record<string, string> = { asOf };
+        if (selectedClassId) params.classId = selectedClassId;
+        if (student) params.studentId = student.id;
+        const effectiveTerm = overrideTermId || termId;
+        if (effectiveTerm) params.termId = effectiveTerm;
+
+        const { data } = await api.get<DebtorsResponse>(
+          "/api/reports/debtors",
+          { params }
+        );
+        setRows(data?.data || []);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [asOf, selectedClassId, student, termId]
+  );
 
   useEffect(() => {
-    load();
-  }, [selectedClassId, asOf, student?.id, termId]);
+    void load();
+  }, [selectedClassId, asOf, student, termId, load]);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -114,7 +155,7 @@ export default function DebtorsPage() {
   };
 
   const findClassLabel = () => {
-    const c = classes.find((c) => c.id === selectedClassId);
+    const c = classes.find((cls) => cls.id === selectedClassId);
     if (!c) return "";
     return `${c.name}${c.stream ? " " + c.stream : ""}${
       c.year ? " • " + c.year : ""
@@ -297,7 +338,7 @@ export default function DebtorsPage() {
       </div>
 
       {/* Table */}
-      <Card>
+      <Card className="border-none shadow-sm bg:white/95 rounded-2xl">
         <CardHeader className="flex items-center justify-between">
           <CardTitle>As of {asOf}</CardTitle>
           {loading && (
@@ -323,7 +364,10 @@ export default function DebtorsPage() {
               </thead>
               <tbody>
                 {filtered.map((r) => (
-                  <tr key={r.studentId} className="border-b last:border-none">
+                  <tr
+                    key={r.studentId}
+                    className="border-b last:border-none hover:bg-[hsl(var(--muted))]/40 transition-colors"
+                  >
                     <td className="py-2 pr-3">{r.studentCode}</td>
                     <td className="py-2 pr-3">
                       {r.firstName} {r.lastName}
@@ -363,7 +407,7 @@ export default function DebtorsPage() {
                   <td className="py-2 pr-3">{totals.due.toLocaleString()}</td>
                   <td className="py-2 pr-3">{totals.paid.toLocaleString()}</td>
                   <td className="py-2 pr-3">{totals.bal.toLocaleString()}</td>
-                  <td className="py-2 pr-3"></td>
+                  <td className="py-2 pr-3" />
                 </tr>
               </tfoot>
             </table>

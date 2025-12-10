@@ -14,7 +14,7 @@ exports.list = async (req, res) => {
 
     const rows = await prisma.feeSetting.findMany({
       where,
-      orderBy: [{ year: "asc" }, { createdAt: "asc" }],
+      orderBy: [{ createdAt: "asc" }],
     });
 
     res.json({ data: rows });
