@@ -12,6 +12,24 @@ type Row = {
   status: "present" | "absent" | "late" | null;
 };
 
+type StudentApi = {
+  id: string;
+  studentCode?: string;
+  student_code?: string;
+  firstName?: string;
+  first_name?: string;
+  lastName?: string;
+  last_name?: string;
+  status?: string | null;
+};
+
+type AttendanceApi = {
+  id: string;
+  student_code: string;
+  name: string;
+  status: "present" | "absent" | "late" | null;
+};
+
 function isoDate(d: Date) {
   return d.toISOString().slice(0, 10);
 }
@@ -37,19 +55,65 @@ export default function AttendancePage() {
   const editableNow = canEdit && isEditableDateStr(date);
 
   const load = async () => {
-    if (!selectedClassId || !date) return;
+    if (!selectedClassId || !date) {
+      setRows([]);
+      return;
+    }
     setLoading(true);
     try {
-      const { data } = await api.get("/api/attendance", {
-        params: { classId: selectedClassId, date },
+      // 1) Base list from /api/students (single source of truth)
+      const studentsRes = await api.get("/api/students", {
+        params: { classId: selectedClassId },
       });
-      setRows(data.data || []);
+      const students: StudentApi[] = studentsRes.data.data || [];
+
+      // Map students to base rows (no attendance yet)
+      let baseRows: Row[] = students
+        // optionally skip suspended/dismissed here if you want
+        // .filter((s) => !s.status || s.status === "active")
+        .map((s) => {
+          const code = s.studentCode ?? s.student_code ?? "";
+          const first = s.firstName ?? s.first_name ?? "";
+          const last = s.lastName ?? s.last_name ?? "";
+          return {
+            id: s.id,
+            student_code: code,
+            name: `${first} ${last}`.trim(),
+            status: null,
+          };
+        });
+
+      // 2) Try to fetch attendance; if it fails, we still keep the student list
+      try {
+        const attendanceRes = await api.get("/api/attendance", {
+          params: { classId: selectedClassId, date },
+        });
+        const attendance: AttendanceApi[] = attendanceRes.data.data || [];
+        const statusById = new Map<string, Row["status"]>();
+        for (const a of attendance) {
+          statusById.set(a.id, a.status);
+        }
+        baseRows = baseRows.map((r) => ({
+          ...r,
+          status: statusById.get(r.id) ?? r.status,
+        }));
+      } catch (err) {
+        console.error("Attendance status fetch failed (ignored):", err);
+        // keep baseRows as-is (no statuses yet)
+      }
+
+      setRows(baseRows);
+    } catch (err) {
+      console.error("Attendance loadStudents error:", err);
+      setRows([]);
     } finally {
       setLoading(false);
     }
   };
+
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClassId, date]);
 
   const presentCount = useMemo(
@@ -68,6 +132,7 @@ export default function AttendancePage() {
     });
     load();
   };
+
   const markOne = async (
     studentId: string,
     status: "present" | "absent" | "late"

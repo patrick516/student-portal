@@ -17,7 +17,7 @@ type Invoice = {
   id: string;
   studentId: string;
   amount: number;
-  status: "unpaid" | "partial" | "paid";
+  status: "unpaid" | "partial" | "paid" | string;
   issuedAt: string;
   termId?: string | null;
 };
@@ -40,12 +40,17 @@ type TermsResponse = { data: Term[] };
 type InvoicesResponse = { data: Invoice[]; termId?: string | null };
 type PaymentsResponse = { data: Payment[] };
 
+// flexible student shape from /api/students
 type StudentApi = {
   id: string;
-  student_code: string;
-  first_name: string;
-  last_name: string;
+  studentCode?: string;
+  student_code?: string;
+  firstName?: string;
+  first_name?: string;
+  lastName?: string;
+  last_name?: string;
 };
+
 type StudentsResponse = { data: StudentApi[] };
 
 type InvoiceByStudent = {
@@ -55,6 +60,15 @@ type InvoiceByStudent = {
 };
 type InvoicesByStudentResponse = { data: InvoiceByStudent[] };
 
+// helper: map studentId -> { code, name }
+type StudentMap = Record<
+  string,
+  {
+    code: string;
+    name: string;
+  }
+>;
+
 export default function FeesPage() {
   const { selectedClassId } = useApp();
 
@@ -62,6 +76,7 @@ export default function FeesPage() {
   const [termId, setTermId] = useState<string>("");
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [students, setStudents] = useState<StudentMap>({});
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -89,7 +104,7 @@ export default function FeesPage() {
   const [payMethod, setPayMethod] = useState("");
   const [payRef, setPayRef] = useState("");
 
-  // ---------- load terms + fees ----------
+  // ---------- load terms ----------
   const loadTerms = useCallback(async () => {
     const { data } = await api.get<TermsResponse>("/api/terms");
     const list = data.data || [];
@@ -98,11 +113,34 @@ export default function FeesPage() {
     if (active && !termId) setTermId(active.id);
   }, [termId]);
 
+  // ---------- load base students + fees for selected class/term ----------
   const loadFees = useCallback(
     async (overrideTermId?: string) => {
       setLoading(true);
       try {
         const termParam = overrideTermId || termId || undefined;
+
+        // 1) students from /api/students (class-aware)
+        let studentMap: StudentMap = {};
+        if (selectedClassId) {
+          const studRes = await api.get<StudentsResponse>("/api/students", {
+            params: { classId: selectedClassId },
+          });
+          const arr: StudentApi[] = studRes.data.data || [];
+          studentMap = arr.reduce<StudentMap>((acc, s) => {
+            const code = s.studentCode ?? s.student_code ?? "";
+            const first = s.firstName ?? s.first_name ?? "";
+            const last = s.lastName ?? s.last_name ?? "";
+            acc[s.id] = {
+              code,
+              name: `${first} ${last}`.trim(),
+            };
+            return acc;
+          }, {});
+        }
+        setStudents(studentMap);
+
+        // 2) invoices/payments (school-wide, we will filter on frontend by class via studentMap)
         const [inv, pay] = await Promise.all([
           api.get<InvoicesResponse>("/api/fees/invoices", {
             params: { termId: termParam, studentId: undefined },
@@ -111,8 +149,21 @@ export default function FeesPage() {
             params: { termId: termParam, studentId: undefined },
           }),
         ]);
-        setInvoices(inv.data.data || []);
-        setPayments(pay.data.data || []);
+        const allInvoices = inv.data.data || [];
+        const allPayments = pay.data.data || [];
+
+        // If a class is selected, only keep invoices/payments for students in that class
+        const filteredInv = selectedClassId
+          ? allInvoices.filter((i) => studentMap[i.studentId])
+          : allInvoices;
+        const filteredPay = selectedClassId
+          ? allPayments.filter((p) => studentMap[p.studentId])
+          : allPayments;
+
+        setInvoices(filteredInv);
+        setPayments(filteredPay);
+
+        // if backend returns a default term, adopt it
         if (!termId && inv.data.termId) {
           setTermId(inv.data.termId || "");
         }
@@ -120,7 +171,7 @@ export default function FeesPage() {
         setLoading(false);
       }
     },
-    [termId]
+    [termId, selectedClassId]
   );
 
   useEffect(() => {
@@ -136,25 +187,39 @@ export default function FeesPage() {
     }
   }, [termId, loadFees]);
 
+  // When class changes from topbar, reload fees
+  useEffect(() => {
+    void loadFees();
+  }, [selectedClassId, loadFees]);
+
+  // ---------- helpers ----------
+  const studentLabel = (id: string): string => {
+    const info = students[id];
+    if (!info) return id;
+    return `${info.code} • ${info.name}`;
+  };
+
   const filteredInvoices = useMemo(() => {
     const s = q.toLowerCase();
-    return invoices.filter((i) =>
-      s ? (i.studentId + i.status).toLowerCase().includes(s) : true
-    );
-  }, [invoices, q]);
+    return invoices.filter((i) => {
+      const label = studentLabel(i.studentId).toLowerCase();
+      return s ? (label + i.status + i.id).toLowerCase().includes(s) : true;
+    });
+  }, [invoices, q, students]);
 
   const filteredPayments = useMemo(() => {
     const s = q.toLowerCase();
-    return payments.filter((p) =>
-      s
-        ? (p.studentId + (p.method || "") + (p.reference || ""))
+    return payments.filter((p) => {
+      const label = studentLabel(p.studentId).toLowerCase();
+      return s
+        ? (label + (p.method || "") + (p.reference || "") + p.invoiceId)
             .toLowerCase()
             .includes(s)
-        : true
-    );
-  }, [payments, q]);
+        : true;
+    });
+  }, [payments, q, students]);
 
-  // ---------- class-aware student search ----------
+  // ---------- class-aware student search for dialogs ----------
   const searchStudents = useCallback(
     async (term: string, setter: (opts: StudentOpt[]) => void) => {
       if (!selectedClassId) {
@@ -164,10 +229,15 @@ export default function FeesPage() {
       const { data } = await api.get<StudentsResponse>("/api/students", {
         params: { search: term, classId: selectedClassId },
       });
-      const opts: StudentOpt[] = (data.data || []).map((s) => ({
-        id: s.id,
-        label: `${s.student_code} • ${s.first_name} ${s.last_name}`,
-      }));
+      const opts: StudentOpt[] = (data.data || []).map((s) => {
+        const code = s.studentCode ?? s.student_code ?? "";
+        const first = s.firstName ?? s.first_name ?? "";
+        const last = s.lastName ?? s.last_name ?? "";
+        return {
+          id: s.id,
+          label: `${code} • ${first} ${last}`.trim(),
+        };
+      });
       setter(opts);
     },
     [selectedClassId]
@@ -211,9 +281,9 @@ export default function FeesPage() {
       const opts =
         (data.data || []).map((i) => ({
           id: i.id,
-          label: `${i.id.slice(0, 8)} • ${i.status.toUpperCase()} • ${Number(
-            i.amount
-          ).toLocaleString()}`,
+          label: `${i.id.slice(0, 8)} • ${String(
+            i.status || ""
+          ).toUpperCase()} • ${Number(i.amount).toLocaleString()}`,
           amount: Number(i.amount),
         })) ?? [];
 
@@ -258,7 +328,6 @@ export default function FeesPage() {
       method: payMethod.trim() || undefined,
       reference: payRef.trim() || undefined,
     });
-    // In future you can use the response here to trigger email/WhatsApp to guardians
 
     setPayStudent(null);
     setPayStudentQuery("");
@@ -551,7 +620,7 @@ export default function FeesPage() {
                     className="border-b last:border-none hover:bg-[hsl(var(--muted))]/40 transition-colors"
                   >
                     <td className="py-2 pr-3">{i.id}</td>
-                    <td className="py-2 pr-3">{i.studentId}</td>
+                    <td className="py-2 pr-3">{studentLabel(i.studentId)}</td>
                     <td className="py-2 pr-3">
                       {Number(i.amount).toLocaleString()}
                     </td>
@@ -605,7 +674,7 @@ export default function FeesPage() {
                   >
                     <td className="py-2 pr-3">{p.id}</td>
                     <td className="py-2 pr-3">{p.invoiceId}</td>
-                    <td className="py-2 pr-3">{p.studentId}</td>
+                    <td className="py-2 pr-3">{studentLabel(p.studentId)}</td>
                     <td className="py-2 pr-3">
                       {Number(p.amount).toLocaleString()}
                     </td>

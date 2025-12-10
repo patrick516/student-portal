@@ -1,4 +1,3 @@
-// frontend/src/app/reports/DebtorsPage.tsx (or wherever it lives)
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/api/client";
 import { useApp } from "@/app/state/useApp";
@@ -16,7 +15,7 @@ type Row = {
   totalDue: number;
   totalPaid: number;
   balance: number;
-  latestInvoice: string;
+  latestInvoice: string | null; // null means no invoices yet
 };
 
 type StudentOpt = { id: string; label: string };
@@ -24,16 +23,28 @@ type StudentOpt = { id: string; label: string };
 type Term = { id: string; name: string; year: number; isActive: boolean };
 
 type TermsResponse = { data: Term[] };
-
 type DebtorsResponse = { data: Row[] };
 
-type StudentsResponse = {
-  data: {
+// flexible student shape from /api/students
+type StudentApi = {
+  id: string;
+  studentCode?: string;
+  student_code?: string;
+  firstName?: string;
+  first_name?: string;
+  lastName?: string;
+  last_name?: string;
+  class_name?: string | null;
+  class?: {
     id: string;
-    student_code: string;
-    first_name: string;
-    last_name: string;
-  }[];
+    name: string;
+    stream?: string | null;
+    year?: number | null;
+  } | null;
+};
+
+type StudentsResponse = {
+  data: StudentApi[];
 };
 
 function todayISO() {
@@ -74,19 +85,21 @@ export default function DebtorsPage() {
       const params: { search: string; classId?: string } = {
         search: searchTerm,
       };
-
-      if (selectedClassId) {
-        params.classId = selectedClassId;
-      }
+      if (selectedClassId) params.classId = selectedClassId;
 
       const { data } = await api.get<StudentsResponse>("/api/students", {
         params,
       });
 
-      const opts: StudentOpt[] = (data.data || []).map((s) => ({
-        id: s.id,
-        label: `${s.student_code} • ${s.first_name} ${s.last_name}`,
-      }));
+      const opts: StudentOpt[] = (data.data || []).map((s) => {
+        const code = s.studentCode ?? s.student_code ?? "";
+        const first = s.firstName ?? s.first_name ?? "";
+        const last = s.lastName ?? s.last_name ?? "";
+        return {
+          id: s.id,
+          label: `${code} • ${first} ${last}`.trim(),
+        };
+      });
       setStudOpts(opts);
     },
     [selectedClassId]
@@ -106,40 +119,107 @@ export default function DebtorsPage() {
 
   const load = useCallback(
     async (overrideTermId?: string) => {
+      if (!selectedClassId) {
+        setRows([]);
+        return;
+      }
       setLoading(true);
       try {
+        // 1) Base student list for this class from /api/students
+        const studentsRes = await api.get<StudentsResponse>("/api/students", {
+          params: { classId: selectedClassId },
+        });
+        const students: StudentApi[] = studentsRes.data.data || [];
+
+        let baseRows: Row[] = students.map((s) => {
+          const code = s.studentCode ?? s.student_code ?? "";
+          const first = s.firstName ?? s.first_name ?? "";
+          const last = s.lastName ?? s.last_name ?? "";
+
+          let className: string | null = null;
+          if (s.class_name) {
+            className = s.class_name;
+          } else if (s.class) {
+            className =
+              s.class.name +
+              (s.class.stream ? " " + s.class.stream : "") +
+              (s.class.year ? " • " + s.class.year : "");
+          }
+
+          return {
+            studentId: s.id,
+            studentCode: code,
+            firstName: first,
+            lastName: last,
+            className,
+            invoiceCount: 0,
+            totalDue: 0,
+            totalPaid: 0,
+            balance: 0,
+            latestInvoice: null,
+          };
+        });
+
+        // 2) Overlay financial data from /api/reports/debtors
         const params: Record<string, string> = { asOf };
-        if (selectedClassId) params.classId = selectedClassId;
-        if (student) params.studentId = student.id;
         const effectiveTerm = overrideTermId || termId;
         if (effectiveTerm) params.termId = effectiveTerm;
+        if (selectedClassId) params.classId = selectedClassId;
 
         const { data } = await api.get<DebtorsResponse>(
           "/api/reports/debtors",
           { params }
         );
-        setRows(data?.data || []);
+        const reportRows: Row[] = data?.data || [];
+        const byStudentId = new Map<string, Row>();
+        reportRows.forEach((r) => byStudentId.set(r.studentId, r));
+
+        baseRows = baseRows.map((r) =>
+          byStudentId.has(r.studentId)
+            ? {
+                ...r,
+                // merge financials from report
+                invoiceCount: byStudentId.get(r.studentId)!.invoiceCount,
+                totalDue: byStudentId.get(r.studentId)!.totalDue,
+                totalPaid: byStudentId.get(r.studentId)!.totalPaid,
+                balance: byStudentId.get(r.studentId)!.balance,
+                latestInvoice: byStudentId.get(r.studentId)!.latestInvoice,
+                className:
+                  byStudentId.get(r.studentId)!.className ?? r.className,
+              }
+            : r
+        );
+
+        setRows(baseRows);
       } finally {
         setLoading(false);
       }
     },
-    [asOf, selectedClassId, student, termId]
+    [asOf, selectedClassId, termId]
   );
 
   useEffect(() => {
     void load();
-  }, [selectedClassId, asOf, student, termId, load]);
+  }, [selectedClassId, asOf, termId, load]);
 
+  // Apply filters on top of merged rows
   const filtered = useMemo(() => {
+    let list = rows;
+
+    // filter by selected student from dropdown
+    if (student) {
+      list = list.filter((r) => r.studentId === student.id);
+    }
+
     const s = q.trim().toLowerCase();
-    return rows.filter((r) =>
-      s
-        ? (r.studentCode + r.firstName + r.lastName + (r.className || ""))
-            .toLowerCase()
-            .includes(s)
-        : true
+    if (!s) return list;
+
+    return list.filter((r) =>
+      (r.studentCode + r.firstName + r.lastName + (r.className || ""))
+        .toLowerCase()
+        .includes(s)
     );
-  }, [rows, q]);
+  }, [rows, q, student]);
 
   const totals = useMemo(() => {
     const due = filtered.reduce((sum, r) => sum + Number(r.totalDue || 0), 0);
@@ -181,7 +261,9 @@ export default function DebtorsPage() {
       r.totalDue,
       r.totalPaid,
       r.balance,
-      new Date(r.latestInvoice).toISOString().slice(0, 10),
+      r.latestInvoice
+        ? new Date(r.latestInvoice).toISOString().slice(0, 10)
+        : "",
     ]);
     const csv = [headers, ...lines]
       .map((l) => l.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(","))
@@ -209,7 +291,11 @@ export default function DebtorsPage() {
         <td>${Number(r.totalDue).toLocaleString()}</td>
         <td>${Number(r.totalPaid).toLocaleString()}</td>
         <td>${Number(r.balance).toLocaleString()}</td>
-        <td>${new Date(r.latestInvoice).toISOString().slice(0, 10)}</td>
+        <td>${
+          r.latestInvoice
+            ? new Date(r.latestInvoice).toISOString().slice(0, 10)
+            : ""
+        }</td>
       </tr>`
       )
       .join("");
@@ -338,7 +424,7 @@ export default function DebtorsPage() {
       </div>
 
       {/* Table */}
-      <Card className="border-none shadow-sm bg:white/95 rounded-2xl">
+      <Card className="border-none shadow-sm bg-white/95 rounded-2xl">
         <CardHeader className="flex items-center justify-between">
           <CardTitle>As of {asOf}</CardTitle>
           {loading && (
@@ -384,7 +470,9 @@ export default function DebtorsPage() {
                       {Number(r.balance).toLocaleString()}
                     </td>
                     <td className="py-2 pr-3">
-                      {new Date(r.latestInvoice).toISOString().slice(0, 10)}
+                      {r.latestInvoice
+                        ? new Date(r.latestInvoice).toISOString().slice(0, 10)
+                        : "-"}
                     </td>
                   </tr>
                 ))}

@@ -13,6 +13,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { useApp } from "@/app/state/useApp";
 
 type StudentRow = {
   id: string;
@@ -20,6 +21,7 @@ type StudentRow = {
   name: string;
   score: number | null;
 };
+
 type Assessment = {
   id: string;
   name: string;
@@ -27,15 +29,38 @@ type Assessment = {
   optional: boolean;
 };
 
+type StudentApi = {
+  id: string;
+  studentCode?: string;
+  student_code?: string;
+  firstName?: string;
+  first_name?: string;
+  lastName?: string;
+  last_name?: string;
+};
+
+type StudentsResponse = { data: StudentApi[] };
+
+type MarksApiRow = {
+  id: string;
+  code: string;
+  name: string;
+  score: number | null;
+};
+
 function useQuery() {
   return new URLSearchParams(useLocation().search);
 }
 
 export default function EnterMarksPage() {
-  // <<--- IMPORTANT DEFAULT EXPORT
   const q = useQuery();
-  const classId = q.get("classId") || "";
+  const queryClassId = q.get("classId") || "";
   const subjectId = q.get("subjectId") || "";
+
+  const { selectedClassId } = useApp();
+
+  // effective class = topbar selection if set, otherwise query param
+  const effectiveClassId = selectedClassId || queryClassId;
 
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [assessmentId, setAssessmentId] = useState<string>("");
@@ -47,37 +72,83 @@ export default function EnterMarksPage() {
     optional: true,
   });
 
+  // ---- Load assessments for this class+subject ----
   const loadAssessments = async () => {
+    if (!effectiveClassId || !subjectId) return;
     const { data } = await api.get("/api/exams/assessments", {
-      params: { classId, subjectId },
+      params: { classId: effectiveClassId, subjectId },
     });
     const arr = (data.data || []) as Assessment[];
     setAssessments(arr);
     if (!assessmentId && arr[0]) setAssessmentId(arr[0].id);
   };
 
-  const loadMarks = async () => {
-    if (!assessmentId) return;
-    const { data } = await api.get("/api/exams/marks", {
-      params: { classId, subjectId, assessmentId },
+  // ---- Core loader: students from /api/students, scores from /api/exams/marks ----
+  const loadStudentsAndMarks = async () => {
+    if (!effectiveClassId) {
+      setRows([]);
+      return;
+    }
+
+    // 1) Base student list from /api/students (single source of truth)
+    const studentsRes = await api.get<StudentsResponse>("/api/students", {
+      params: { classId: effectiveClassId },
     });
-    setRows((data.data || []) as StudentRow[]);
+    const students: StudentApi[] = studentsRes.data.data || [];
+
+    let baseRows: StudentRow[] = students.map((s) => {
+      const code = s.studentCode ?? s.student_code ?? "";
+      const first = s.firstName ?? s.first_name ?? "";
+      const last = s.lastName ?? s.last_name ?? "";
+      return {
+        id: s.id,
+        code,
+        name: `${first} ${last}`.trim(),
+        score: null,
+      };
+    });
+
+    // 2) If an assessment is selected, fetch marks and merge into rows
+    if (assessmentId && subjectId) {
+      const marksRes = await api.get("/api/exams/marks", {
+        params: {
+          classId: effectiveClassId,
+          subjectId,
+          assessmentId,
+        },
+      });
+      const marks: MarksApiRow[] = marksRes.data.data || [];
+      const scoreById = new Map<string, number | null>();
+      marks.forEach((m) => {
+        scoreById.set(m.id, m.score);
+      });
+
+      baseRows = baseRows.map((r) => ({
+        ...r,
+        score: scoreById.get(r.id) ?? null,
+      }));
+    }
+
+    setRows(baseRows);
   };
 
   useEffect(() => {
-    loadAssessments();
-  }, []);
+    void loadAssessments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveClassId, subjectId]);
 
   useEffect(() => {
-    loadMarks();
-  }, [assessmentId]);
+    void loadStudentsAndMarks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveClassId, subjectId, assessmentId, selectedClassId]);
 
   const onSaveScore = async (studentId: string, v: string) => {
+    if (!assessmentId || !effectiveClassId || !subjectId) return;
     const score = Number(v);
     if (Number.isNaN(score)) return;
 
     await api.put("/api/exams/mark", {
-      classId,
+      classId: effectiveClassId,
       subjectId,
       assessmentId,
       studentId,
@@ -90,8 +161,9 @@ export default function EnterMarksPage() {
   };
 
   const addAssessment = async () => {
+    if (!effectiveClassId || !subjectId) return;
     await api.post("/api/exams/assessments", {
-      classId,
+      classId: effectiveClassId,
       subjectId,
       name: newForm.name.trim(),
       weight: Number(newForm.weight),
@@ -100,7 +172,8 @@ export default function EnterMarksPage() {
 
     setOpenNewAssess(false);
     setNewForm({ name: "", weight: 20, optional: true });
-    loadAssessments();
+    await loadAssessments();
+    await loadStudentsAndMarks();
   };
 
   const avg = useMemo(() => {
@@ -109,6 +182,8 @@ export default function EnterMarksPage() {
       ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length)
       : 0;
   }, [rows]);
+
+  const canScore = !!assessmentId && !!effectiveClassId && !!subjectId;
 
   return (
     <div className="space-y-4">
@@ -178,7 +253,7 @@ export default function EnterMarksPage() {
                   </Button>
                   <Button
                     onClick={addAssessment}
-                    disabled={!newForm.name.trim()}
+                    disabled={!newForm.name.trim() || !effectiveClassId}
                   >
                     Save
                   </Button>
@@ -216,6 +291,7 @@ export default function EnterMarksPage() {
                         defaultValue={r.score ?? ""}
                         onBlur={(e) => onSaveScore(r.id, e.target.value)}
                         className="w-24 h-8"
+                        disabled={!canScore}
                       />
                     </td>
                   </tr>
@@ -227,13 +303,20 @@ export default function EnterMarksPage() {
                       colSpan={3}
                       className="py-8 text-center text-[hsl(var(--muted-foreground))]"
                     >
-                      No students
+                      {effectiveClassId
+                        ? "No students for this class (or no access/assessments)."
+                        : "No class selected."}
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
+          {!canScore && (
+            <div className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">
+              Create and select an assessment to start entering scores.
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

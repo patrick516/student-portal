@@ -13,7 +13,7 @@ type SubjectResult = {
   points: number;
 };
 
-type Row = {
+type ResultRow = {
   studentId: string;
   studentCode: string;
   name: string;
@@ -24,26 +24,92 @@ type Row = {
   passed: boolean;
 };
 
+type StudentApi = {
+  id: string;
+  studentCode?: string;
+  student_code?: string;
+  firstName?: string;
+  first_name?: string;
+  lastName?: string;
+  last_name?: string;
+};
+
 export default function ResultsPage() {
   const { selectedClassId } = useApp();
-  const [rows, setRows] = useState<Row[]>([]);
+  const [rows, setRows] = useState<ResultRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const load = async () => {
-    if (!selectedClassId) return;
+    if (!selectedClassId) {
+      setRows([]);
+      return;
+    }
     setLoading(true);
+    setNotice(null);
     try {
-      const { data } = await api.get(
-        `/api/exams/results/class/${selectedClassId}`
+      // 1) Base student list for this class
+      const studentsRes = await api.get("/api/students", {
+        params: { classId: selectedClassId },
+      });
+      const students: StudentApi[] = studentsRes.data.data || [];
+
+      // map to base rows with no results yet
+      let baseRows: ResultRow[] = students.map((s) => {
+        const code = s.studentCode ?? s.student_code ?? "";
+        const first = s.firstName ?? s.first_name ?? "";
+        const last = s.lastName ?? s.last_name ?? "";
+        const name = `${first} ${last}`.trim();
+
+        return {
+          studentId: s.id,
+          studentCode: code,
+          name,
+          subjects: [],
+          bestSix: [],
+          totalPoints: 0,
+          totalMarks: 0,
+          passed: false,
+        };
+      });
+
+      // 2) Try to fetch computed results and overlay
+      try {
+        const res = await api.get(
+          `/api/exams/results/class/${selectedClassId}`
+        );
+        const resultData: ResultRow[] = (res.data?.data || []) as ResultRow[];
+
+        const byId = new Map<string, ResultRow>();
+        resultData.forEach((r) => byId.set(r.studentId, r));
+
+        baseRows = baseRows.map((r) =>
+          byId.has(r.studentId) ? byId.get(r.studentId)! : r
+        );
+      } catch (err: any) {
+        const msg =
+          err?.response?.data?.error ||
+          "No computed results yet. Ensure assessments, marks and grade scheme are configured.";
+        setNotice(msg);
+        // keep baseRows as just student list with zeroed results
+      }
+
+      // sort by totalPoints/marks but keep students without results at the bottom
+      baseRows.sort(
+        (a, b) =>
+          (a.totalPoints || 9999) - (b.totalPoints || 9999) ||
+          (b.totalMarks || 0) - (a.totalMarks || 0)
       );
-      setRows((data?.data || []) as Row[]);
+
+      setRows(baseRows);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    load();
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClassId]);
 
   const passRate = useMemo(
@@ -152,6 +218,11 @@ export default function ResultsPage() {
           <div className="text-sm">Pass rate: {passRate}%</div>
         </CardHeader>
         <CardContent>
+          {notice && (
+            <div className="mb-3 text-xs text-[hsl(var(--muted-foreground))]">
+              {notice}
+            </div>
+          )}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-left border-b">
@@ -169,9 +240,15 @@ export default function ResultsPage() {
                   <tr key={r.studentId} className="border-b last:border-none">
                     <td className="py-2 pr-3">{r.studentCode}</td>
                     <td className="py-2 pr-3">{r.name}</td>
-                    <td className="py-2 pr-3">{r.totalPoints}</td>
-                    <td className="py-2 pr-3">{r.totalMarks}</td>
-                    <td className="py-2 pr-3">{r.passed ? "Yes" : "No"}</td>
+                    <td className="py-2 pr-3">
+                      {r.subjects.length ? r.totalPoints : "—"}
+                    </td>
+                    <td className="py-2 pr-3">
+                      {r.subjects.length ? r.totalMarks : "—"}
+                    </td>
+                    <td className="py-2 pr-3">
+                      {r.subjects.length ? (r.passed ? "Yes" : "No") : "—"}
+                    </td>
                     <td className="flex flex-wrap gap-2 py-2 pr-3">
                       <Button
                         size="sm"
@@ -184,6 +261,7 @@ export default function ResultsPage() {
                         size="sm"
                         variant="outline"
                         onClick={() => openReportPack(r.studentId)}
+                        disabled={!r.subjects.length}
                       >
                         Report Pack
                       </Button>
@@ -196,7 +274,7 @@ export default function ResultsPage() {
                       colSpan={6}
                       className="py-8 text-center text-[hsl(var(--muted-foreground))]"
                     >
-                      No results.
+                      No students for this class.
                     </td>
                   </tr>
                 )}

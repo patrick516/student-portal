@@ -35,6 +35,36 @@ type StudentRow = {
   class?: Klass | null;
 };
 
+type StudentDetail = StudentRow;
+
+type Guardian = {
+  id: string;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  relation?: string | null;
+};
+
+type SubjectResult = {
+  subjectId: string;
+  subjectName?: string | null;
+  subjectCode?: string | null;
+  total: number;
+  grade: string;
+  points: number;
+};
+
+type ResultRow = {
+  studentId: string;
+  studentCode: string;
+  name: string;
+  subjects: SubjectResult[];
+  bestSix: SubjectResult[];
+  totalPoints: number;
+  totalMarks: number;
+  passed: boolean;
+};
+
 type StudentsResponse = { data: StudentRow[] };
 
 type NewStudentForm = {
@@ -119,6 +149,19 @@ export default function StudentsPage() {
   // view student dialog
   const [openView, setOpenView] = useState(false);
   const [selected, setSelected] = useState<StudentRow | null>(null);
+  const [fullStudent, setFullStudent] = useState<StudentDetail | null>(null);
+  const [guardians, setGuardians] = useState<Guardian[]>([]);
+  const [viewLoading, setViewLoading] = useState(false);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [studentSubjects, setStudentSubjects] = useState<SubjectResult[]>([]);
+
+  // inline suspend / dismiss forms
+  const [showSuspendForm, setShowSuspendForm] = useState(false);
+  const [suspendDays, setSuspendDays] = useState("");
+  const [suspendReason, setSuspendReason] = useState("");
+
+  const [showDismissForm, setShowDismissForm] = useState(false);
+  const [dismissReason, setDismissReason] = useState("");
 
   // ========= advanced loader (search + class filter) =========
   const loadStudents = async (searchTerm: string, classFilter?: string) => {
@@ -133,7 +176,6 @@ export default function StudentsPage() {
         params,
       });
 
-      // backend already enforces permissions for teacher / bursar
       const list: StudentRow[] = data.data || [];
       setRows(list);
     } catch (err) {
@@ -162,7 +204,6 @@ export default function StudentsPage() {
   const handleOpenAdd = (open: boolean) => {
     setOpenAdd(open);
     if (open) {
-      // preselect current class if it's one of the allowed ones
       const preferredClassId =
         selectedClassId && addableClasses.some((c) => c.id === selectedClassId)
           ? selectedClassId
@@ -202,9 +243,48 @@ export default function StudentsPage() {
     }
   };
 
+  const loadStudentDetails = async (id: string) => {
+    setViewLoading(true);
+    setActionMessage(null);
+    setShowSuspendForm(false);
+    setShowDismissForm(false);
+    setStudentSubjects([]);
+
+    try {
+      // 1) Student + class
+      const sRes = await api.get(`/api/students/${id}`);
+      const s: StudentDetail = sRes.data.data;
+      setFullStudent(s);
+
+      // 2) Guardians
+      const gRes = await api.get("/api/guardians", {
+        params: { studentId: id },
+      });
+      setGuardians(gRes.data.data || []);
+
+      // 3) Subjects via latest class results (same logic as StudentProfilePage)
+      if (s.class?.id) {
+        const rRes = await api.get(`/api/exams/results/class/${s.class.id}`);
+        const rows: ResultRow[] = rRes.data.data || [];
+        const row = rows.find((r) => r.studentId === id);
+        setStudentSubjects(row?.subjects || []);
+      } else {
+        setStudentSubjects([]);
+      }
+    } catch (err) {
+      console.error("loadStudentDetails error:", err);
+    } finally {
+      setViewLoading(false);
+    }
+  };
+
   const openViewStudent = (st: StudentRow) => {
     setSelected(st);
+    setFullStudent(null);
+    setGuardians([]);
+    setStudentSubjects([]);
     setOpenView(true);
+    void loadStudentDetails(st.id);
   };
 
   const deleteStudent = async () => {
@@ -217,52 +297,62 @@ export default function StudentsPage() {
       await loadStudents(q, selectedClassId || undefined);
     } catch (err) {
       console.error("deleteStudent error:", err);
-      alert("Failed to delete student.");
+      setActionMessage("Failed to delete student.");
     }
   };
 
-  const suspendStudent = async () => {
+  const confirmSuspend = async () => {
     if (!selected) return;
-    const daysStr = window.prompt(
-      "Enter number of days for suspension (e.g. 3):"
-    );
-    if (!daysStr) return;
-    const days = Number(daysStr);
-    if (!days || days <= 0) {
-      alert("Please enter a valid number of days.");
+    const daysNum = Number(suspendDays);
+    if (!daysNum || daysNum <= 0) {
+      setActionMessage("Please enter a valid number of days.");
       return;
     }
-    const reason = window.prompt("Enter reason for suspension:") || "";
     try {
       await api.post(`/api/students/${selected.id}/suspend`, {
-        days,
-        reason,
+        days: daysNum,
+        reason: suspendReason.trim(),
       });
+      setShowSuspendForm(false);
+      setSuspendDays("");
+      setSuspendReason("");
+      setActionMessage("Student suspended. Guardian will be notified.");
       await loadStudents(q, selectedClassId || undefined);
-      alert("Student suspended and guardian will be notified (backend).");
+      await loadStudentDetails(selected.id);
     } catch (err) {
-      console.error("suspendStudent error:", err);
-      alert("Failed to suspend student.");
+      console.error("confirmSuspend error:", err);
+      setActionMessage("Failed to suspend student.");
     }
   };
 
-  const dismissStudent = async () => {
+  const confirmDismiss = async () => {
     if (!selected) return;
-    const reason = window.prompt("Enter reason for dismissal:") || "";
-    if (!reason) return;
+    if (!dismissReason.trim()) {
+      setActionMessage("Please enter a dismissal reason.");
+      return;
+    }
     try {
       await api.post(`/api/students/${selected.id}/dismiss`, {
-        reason,
+        reason: dismissReason.trim(),
       });
+      setShowDismissForm(false);
+      setDismissReason("");
+      setActionMessage("Student dismissed. Guardian will be notified.");
       await loadStudents(q, selectedClassId || undefined);
-      alert("Student dismissed and guardian will be notified (backend).");
+      await loadStudentDetails(selected.id);
     } catch (err) {
-      console.error("dismissStudent error:", err);
-      alert("Failed to dismiss student.");
+      console.error("confirmDismiss error:", err);
+      setActionMessage("Failed to dismiss student.");
     }
   };
 
-  const selectedAge = selected ? calculateAge(selected.dateOfBirth) : null;
+  const s: StudentDetail | StudentRow | null = fullStudent || selected;
+  const selectedAge = s ? calculateAge((s as any).dateOfBirth) : null;
+
+  // 🔐 who is allowed to suspend/dismiss/delete THIS student?
+  const canDisciplineThisStudent =
+    !!s &&
+    (isAdmin || (isTeacher && s.class && myFormClassIds.includes(s.class.id)));
 
   return (
     <div className="space-y-4">
@@ -546,77 +636,238 @@ export default function StudentsPage() {
         </CardContent>
       </Card>
 
-      {/* View Student dialog with actions */}
+      {/* View Student dialog with full details + subjects + inline actions */}
       <Dialog open={openView} onOpenChange={(v) => !v && setOpenView(false)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Student Details</DialogTitle>
           </DialogHeader>
-          {selected && (
-            <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-1 text-sm">
-              <div className="grid gap-1">
-                <div className="font-semibold">
-                  {selected.firstName}
-                  {selected.middleName ? " " + selected.middleName : ""}{" "}
-                  {selected.lastName}
+
+          {!s || viewLoading ? (
+            <div className="text-sm text-[hsl(var(--muted-foreground))]">
+              Loading details…
+            </div>
+          ) : (
+            <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1 text-sm">
+              {/* Top summary */}
+              <div className="space-y-1">
+                <div className="text-base font-semibold">
+                  {s.firstName}
+                  {s.middleName ? " " + s.middleName : ""} {s.lastName}
                 </div>
                 <div className="text-xs text-[hsl(var(--muted-foreground))]">
-                  Code: {selected.studentCode}
+                  Code: {s.studentCode}
                 </div>
-              </div>
-
-              <div className="grid gap-1">
                 <div>
-                  <span className="font-medium">Class: </span>
-                  {selected.class
-                    ? `${selected.class.name}${
-                        selected.class.stream ? " " + selected.class.stream : ""
-                      }${
-                        selected.class.year ? " • " + selected.class.year : ""
-                      }`
+                  <span className="font-medium">Class:</span>{" "}
+                  {s.class
+                    ? `${s.class.name}${
+                        s.class.stream ? " " + s.class.stream : ""
+                      }${s.class.year ? " • " + s.class.year : ""}`
                     : "-"}
                 </div>
                 <div>
-                  <span className="font-medium">Status: </span>
-                  <span className="capitalize">{selected.status}</span>
+                  <span className="font-medium">Status:</span>{" "}
+                  <span className="capitalize">{s.status}</span>
                 </div>
-                {selected.dateOfBirth && (
+                {s.dateOfBirth && (
                   <div>
-                    <span className="font-medium">Date of Birth: </span>
-                    {new Date(selected.dateOfBirth).toLocaleDateString()}
+                    <span className="font-medium">Date of Birth:</span>{" "}
+                    {new Date(s.dateOfBirth).toLocaleDateString()}
                     {selectedAge !== null && ` • ${selectedAge} years`}
                   </div>
                 )}
-                {selected.phone && (
+                {s.phone && (
                   <div>
-                    <span className="font-medium">Phone: </span>
-                    {selected.phone}
+                    <span className="font-medium">Phone:</span> {s.phone}
                   </div>
                 )}
-                {selected.nationalId && (
+                {s.nationalId && (
                   <div>
-                    <span className="font-medium">National ID: </span>
-                    {selected.nationalId}
+                    <span className="font-medium">National ID:</span>{" "}
+                    {s.nationalId}
                   </div>
                 )}
               </div>
 
+              {/* Subjects */}
               <div className="pt-3 border-t">
-                <div className="text-xs text-[hsl(var(--muted-foreground))] mb-2">
+                <div className="mb-1 text-sm font-semibold">
+                  Subjects ({studentSubjects.length})
+                </div>
+                {studentSubjects.length === 0 ? (
+                  <div className="text-xs text-[hsl(var(--muted-foreground))]">
+                    No subjects found yet for this student. Ensure assessments
+                    and marks have been captured.
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-1">
+                    {studentSubjects.map((subj) => (
+                      <span
+                        key={subj.subjectId}
+                        className="px-2 py-0.5 rounded-full bg-[hsl(var(--muted))] text-[10px] text-[hsl(var(--muted-foreground))]"
+                      >
+                        {subj.subjectName || subj.subjectCode || "Subject"}{" "}
+                        {subj.subjectCode ? `(${subj.subjectCode})` : ""}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Guardians */}
+              <div className="pt-3 border-t">
+                <div className="mb-1 text-sm font-semibold">
+                  Guardian Details
+                </div>
+                {guardians.length === 0 ? (
+                  <div className="text-xs text-[hsl(var(--muted-foreground))]">
+                    No guardians found. Use the Guardians page to register one.
+                  </div>
+                ) : (
+                  <ul className="space-y-1 text-sm">
+                    {guardians.map((g) => (
+                      <li key={g.id}>
+                        <span className="font-semibold">{g.name}</span>{" "}
+                        {g.relation && <span>({g.relation})</span>} •{" "}
+                        <span>{g.phone || g.email || "No contact"}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* Actions + inline forms (only if permitted) */}
+              <div className="pt-3 space-y-2 border-t">
+                <div className="text-xs text-[hsl(var(--muted-foreground))]">
                   Actions (these will also notify the guardian from the
                   backend):
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" size="sm" onClick={suspendStudent}>
-                    Suspend
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={dismissStudent}>
-                    Dismiss
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={deleteStudent}>
-                    Delete
-                  </Button>
-                </div>
+
+                {actionMessage && (
+                  <div className="px-2 py-1 text-xs border rounded text-emerald-700 bg-emerald-50 border-emerald-200">
+                    {actionMessage}
+                  </div>
+                )}
+
+                {canDisciplineThisStudent ? (
+                  <>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setShowSuspendForm((prev) => !prev);
+                          setShowDismissForm(false);
+                          setActionMessage(null);
+                        }}
+                      >
+                        Suspend
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setShowDismissForm((prev) => !prev);
+                          setShowSuspendForm(false);
+                          setActionMessage(null);
+                        }}
+                      >
+                        Dismiss
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={deleteStudent}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+
+                    {/* Suspend form */}
+                    {showSuspendForm && (
+                      <div className="mt-3 border rounded-lg p-3 space-y-2 bg-[hsl(var(--muted))]/30">
+                        <div className="text-xs font-semibold">
+                          Suspend Student
+                        </div>
+                        <div className="grid gap-1.5 sm:grid-cols-2 sm:gap-3">
+                          <div className="grid gap-1.5">
+                            <Label className="text-xs">
+                              Days of suspension
+                            </Label>
+                            <Input
+                              type="number"
+                              min={1}
+                              value={suspendDays}
+                              onChange={(e) => setSuspendDays(e.target.value)}
+                            />
+                          </div>
+                          <div className="grid gap-1.5 sm:col-span-2">
+                            <Label className="text-xs">Reason</Label>
+                            <textarea
+                              className="min-h-[80px] rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--input))] px-3 py-2 text-xs outline-none"
+                              value={suspendReason}
+                              onChange={(e) => setSuspendReason(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex justify-end gap-2 mt-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setShowSuspendForm(false);
+                              setSuspendDays("");
+                              setSuspendReason("");
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                          <Button size="sm" onClick={confirmSuspend}>
+                            Confirm Suspend
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Dismiss form */}
+                    {showDismissForm && (
+                      <div className="mt-3 border rounded-lg p-3 space-y-2 bg-[hsl(var(--muted))]/30">
+                        <div className="text-xs font-semibold">
+                          Dismiss Student
+                        </div>
+                        <div className="grid gap-1.5">
+                          <Label className="text-xs">Reason</Label>
+                          <textarea
+                            className="min-h-[80px] rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--input))] px-3 py-2 text-xs outline-none"
+                            value={dismissReason}
+                            onChange={(e) => setDismissReason(e.target.value)}
+                          />
+                        </div>
+                        <div className="flex justify-end gap-2 mt-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setShowDismissForm(false);
+                              setDismissReason("");
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                          <Button size="sm" onClick={confirmDismiss}>
+                            Confirm Dismiss
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="text-xs text-[hsl(var(--muted-foreground))]">
+                    You can view this student’s details but you do not have
+                    permission to suspend, dismiss or delete them.
+                  </div>
+                )}
               </div>
             </div>
           )}

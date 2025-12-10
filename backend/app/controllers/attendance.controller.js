@@ -38,14 +38,21 @@ exports.listForClass = async (req, res) => {
     const day = dateOnly(date);
 
     // students in class (active)
+    // students in this class (all statuses)
     const students = await prisma.student.findMany({
       where: {
         schoolId: req.user.schoolId,
         currentClassId: classId,
-        status: "active",
+        // no status filter: they'll all appear in results lists,
+        // but only those with marks will get scores.
       },
-      select: { id: true, studentCode: true, firstName: true, lastName: true },
-      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+      select: {
+        id: true,
+        studentCode: true,
+        firstName: true,
+        lastName: true,
+        status: true,
+      },
     });
 
     // existing marks for that day
@@ -88,13 +95,22 @@ exports.markAll = async (req, res) => {
         .status(403)
         .json({ error: "You can only mark attendance for today or yesterday" });
 
+    // students in class (all statuses)
     const students = await prisma.student.findMany({
       where: {
         schoolId: req.user.schoolId,
         currentClassId: classId,
-        status: "active",
+        // we include suspended/dismissed so they appear;
+        // later we can disable marking for them on the frontend
       },
-      select: { id: true },
+      select: {
+        id: true,
+        studentCode: true,
+        firstName: true,
+        lastName: true,
+        status: true,
+      },
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     });
 
     const ops = students.map((s) =>

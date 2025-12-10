@@ -122,18 +122,19 @@ exports.listMarks = async (req, res) => {
         .json({ error: "classId, subjectId, assessmentId required" });
     }
 
-    // students in class
+    // students in class (all statuses)
     const students = await prisma.student.findMany({
       where: {
         schoolId: req.user.schoolId,
         currentClassId: classId,
-        status: "active",
+        // no status filter: show everyone in that class
       },
       select: {
         id: true,
         studentCode: true,
         firstName: true,
         lastName: true,
+        status: true,
       },
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     });
@@ -264,14 +265,23 @@ exports.classResults = async (req, res) => {
     }
 
     // students
+    // students in class (all statuses)
     const students = await prisma.student.findMany({
       where: {
         schoolId: req.user.schoolId,
         currentClassId: classId,
-        status: "active",
+        // no status filter: show everyone in that class
       },
-      select: { id: true, studentCode: true, firstName: true, lastName: true },
+      select: {
+        id: true,
+        studentCode: true,
+        firstName: true,
+        lastName: true,
+        status: true,
+      },
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     });
+
     if (!students.length) return res.json({ data: [] });
 
     // assessments for class
@@ -422,15 +432,23 @@ exports.sendResultsEmail = async (req, res) => {
         .json({ error: "Only form teacher or admin can send results emails" });
     }
 
-    // get full class results (reuse logic)
+    // students in this class (all statuses)
     const students = await prisma.student.findMany({
       where: {
         schoolId: req.user.schoolId,
         currentClassId: classId,
-        status: "active",
+        // no status filter: they'll all appear in results lists,
+        // but only those with marks will get scores.
       },
-      select: { id: true, studentCode: true, firstName: true, lastName: true },
+      select: {
+        id: true,
+        studentCode: true,
+        firstName: true,
+        lastName: true,
+        status: true,
+      },
     });
+
     const target = students.find((s) => s.id === studentId);
     if (!target)
       return res.status(404).json({ error: "Student not found in this class" });
