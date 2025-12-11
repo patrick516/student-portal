@@ -15,6 +15,7 @@ router.post("/", ctrl.create);
 
 // Get single student profile (with access checks for teachers)
 router.get("/:id", ctrl.getOne);
+router.post("/:id/unsuspend", ctrl.unsuspend);
 
 // Suspend / dismiss / delete (actions visible in UI only to allowed roles)
 router.post("/:id/suspend", ctrl.suspend);

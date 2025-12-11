@@ -1,9 +1,21 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { api } from "@/api/client";
 import { useApp } from "@/app/state/useApp";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Calendar,
+  Users,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Printer,
+  Loader2,
+  CalendarDays,
+  FileText,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 type Row = {
   id: string;
@@ -45,6 +57,62 @@ function isEditableDateStr(s: string) {
   return s === todayISO() || s === yesterdayISO();
 }
 
+const StatusButton = ({
+  status,
+  currentStatus,
+  onClick,
+  disabled,
+}: {
+  status: "present" | "absent" | "late";
+  currentStatus: string | null;
+  onClick: () => void;
+  disabled: boolean;
+}) => {
+  const config = {
+    present: {
+      label: "Present",
+      activeClass:
+        "bg-emerald-100 text-emerald-700 border-emerald-300 hover:bg-emerald-200",
+      inactiveClass:
+        "bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200",
+      icon: <CheckCircle className="w-3.5 h-3.5" />,
+    },
+    absent: {
+      label: "Absent",
+      activeClass:
+        "bg-rose-100 text-rose-700 border-rose-300 hover:bg-rose-200",
+      inactiveClass:
+        "bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200",
+      icon: <XCircle className="w-3.5 h-3.5" />,
+    },
+    late: {
+      label: "Late",
+      activeClass:
+        "bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200",
+      inactiveClass:
+        "bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200",
+      icon: <Clock className="w-3.5 h-3.5" />,
+    },
+  };
+
+  const isActive = currentStatus === status;
+  const btnConfig = config[status];
+
+  return (
+    <button
+      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
+        isActive ? btnConfig.activeClass : btnConfig.inactiveClass
+      } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+      onClick={onClick}
+      disabled={disabled}
+      type="button"
+    >
+      {btnConfig.icon}
+      {btnConfig.label}
+    </button>
+  );
+};
+
 export default function AttendancePage() {
   const { user, selectedClassId } = useApp();
   const [date, setDate] = useState<string>(todayISO());
@@ -54,7 +122,7 @@ export default function AttendancePage() {
   const canEdit = user?.role === "teacher";
   const editableNow = canEdit && isEditableDateStr(date);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!selectedClassId || !date) {
       setRows([]);
       return;
@@ -68,20 +136,17 @@ export default function AttendancePage() {
       const students: StudentApi[] = studentsRes.data.data || [];
 
       // Map students to base rows (no attendance yet)
-      let baseRows: Row[] = students
-        // optionally skip suspended/dismissed here if you want
-        // .filter((s) => !s.status || s.status === "active")
-        .map((s) => {
-          const code = s.studentCode ?? s.student_code ?? "";
-          const first = s.firstName ?? s.first_name ?? "";
-          const last = s.lastName ?? s.last_name ?? "";
-          return {
-            id: s.id,
-            student_code: code,
-            name: `${first} ${last}`.trim(),
-            status: null,
-          };
-        });
+      let baseRows: Row[] = students.map((s) => {
+        const code = s.studentCode ?? s.student_code ?? "";
+        const first = s.firstName ?? s.first_name ?? "";
+        const last = s.lastName ?? s.last_name ?? "";
+        return {
+          id: s.id,
+          student_code: code,
+          name: `${first} ${last}`.trim(),
+          status: null,
+        };
+      });
 
       // 2) Try to fetch attendance; if it fails, we still keep the student list
       try {
@@ -109,15 +174,22 @@ export default function AttendancePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedClassId, date]);
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedClassId, date]);
+  }, [load]);
 
   const presentCount = useMemo(
     () => rows.filter((r) => r.status === "present").length,
+    [rows]
+  );
+  const absentCount = useMemo(
+    () => rows.filter((r) => r.status === "absent").length,
+    [rows]
+  );
+  const lateCount = useMemo(
+    () => rows.filter((r) => r.status === "late").length,
     [rows]
   );
   const total = rows.length;
@@ -198,150 +270,327 @@ export default function AttendancePage() {
     w.print();
   };
 
+  const getDisplayDate = (dateStr: string) => {
+    if (dateStr === todayISO()) return "Today";
+    if (dateStr === yesterdayISO()) return "Yesterday";
+    return new Date(dateStr).toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold">Attendance</h1>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-3">
+          <div className="rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 p-2.5 shadow-lg">
+            <Users className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">
+              Attendance Management
+            </h1>
+            <p className="text-sm text-slate-600">
+              Track and manage student attendance records
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card className="shadow-sm border-slate-200">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-600">
+                  Total Students
+                </p>
+                <p className="text-2xl font-bold text-slate-900">{total}</p>
+              </div>
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <Users className="w-5 h-5 text-blue-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm border-slate-200">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-600">Present</p>
+                <p className="text-2xl font-bold text-emerald-700">
+                  {presentCount}
+                </p>
+              </div>
+              <div className="p-2 rounded-lg bg-emerald-100">
+                <CheckCircle className="w-5 h-5 text-emerald-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm border-slate-200">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-600">Absent</p>
+                <p className="text-2xl font-bold text-rose-700">
+                  {absentCount}
+                </p>
+              </div>
+              <div className="p-2 rounded-lg bg-rose-100">
+                <XCircle className="w-5 h-5 text-rose-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm border-slate-200">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-600">
+                  Attendance Rate
+                </p>
+                <p className="text-2xl font-bold text-indigo-700">{pct}%</p>
+              </div>
+              <div className="p-2 bg-indigo-100 rounded-lg">
+                <CalendarDays className="w-5 h-5 text-indigo-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Controls Bar */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          {/* Date Selector */}
+          <div className="relative">
+            <Calendar className="absolute w-4 h-4 -translate-y-1/2 left-3 top-1/2 text-slate-400" />
+            <Input
+              type="date"
+              value={date}
+              min={yesterdayISO()}
+              max={todayISO()}
+              onChange={(e) => setDate(e.target.value)}
+              className="h-10 pl-10 pr-4 text-sm border rounded-xl border-slate-300 w-[180px]"
+            />
+          </div>
+
+          {/* Export Buttons */}
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={exportCSV}
+              variant="outline"
+              className="flex items-center gap-2 rounded-xl border-slate-300 hover:bg-slate-50"
+            >
+              <FileText className="w-4 h-4" />
+              Export CSV
+            </Button>
+            <Button
+              onClick={exportPDF}
+              variant="outline"
+              className="flex items-center gap-2 rounded-xl border-slate-300 hover:bg-slate-50"
+            >
+              <Printer className="w-4 h-4" />
+              Export PDF
+            </Button>
+          </div>
+        </div>
+
+        {/* Mark All Buttons */}
         <div className="flex items-center gap-2">
-          <Input
-            type="date"
-            value={date}
-            min={yesterdayISO()}
-            max={todayISO()}
-            onChange={(e) => setDate(e.target.value)}
-            className="h-9 w-[180px]"
-          />
-          <Button onClick={exportCSV} variant="outline">
-            Export CSV
-          </Button>
-          <Button onClick={exportPDF} variant="outline">
-            Export PDF
-          </Button>
-          <Button onClick={() => markAll("present")} disabled={!editableNow}>
-            Mark all Present
+          <Button
+            onClick={() => markAll("present")}
+            disabled={!editableNow}
+            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700"
+          >
+            <CheckCircle className="w-4 h-4" />
+            Mark All Present
           </Button>
           <Button
             onClick={() => markAll("absent")}
             variant="outline"
             disabled={!editableNow}
+            className="flex items-center gap-2 rounded-xl border-rose-300 text-rose-700 hover:bg-rose-50"
           >
-            Mark all Absent
+            <XCircle className="w-4 h-4" />
+            Mark All Absent
           </Button>
         </div>
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>
-            {date === todayISO()
-              ? "Today"
-              : date === yesterdayISO()
-              ? "Yesterday"
-              : date}
-            : {presentCount}/{total} present ({pct}%)
-          </CardTitle>
-          {loading && (
-            <span className="text-sm text-[hsl(var(--muted-foreground))]">
-              Loading…
-            </span>
-          )}
+      {/* Attendance Table Card */}
+      <Card className="overflow-hidden shadow-lg border-slate-200">
+        <CardHeader className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-blue-50/30">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg shadow bg-gradient-to-br from-blue-500 to-indigo-600">
+                <CalendarDays className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <CardTitle className="text-lg font-semibold text-slate-800">
+                  {getDisplayDate(date)}
+                </CardTitle>
+                <div className="text-sm text-slate-600 mt-0.5">
+                  {presentCount} out of {total} students present ({pct}%)
+                  {lateCount > 0 && ` • ${lateCount} late`}
+                </div>
+              </div>
+            </div>
+            <div className="text-sm text-slate-600">
+              {loading ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Loading…
+                </div>
+              ) : (
+                <Badge variant="outline" className="border-slate-300">
+                  {editableNow ? "Editable" : "View Only"}
+                </Badge>
+              )}
+            </div>
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-left border-b">
-                <tr>
-                  <th className="py-2 pr-3">Code</th>
-                  <th className="py-2 pr-3">Student</th>
-                  <th className="py-2 pr-3">Status</th>
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/50">
+                  <th className="px-6 py-4 text-xs font-semibold tracking-wider text-left uppercase text-slate-600">
+                    Student Code
+                  </th>
+                  <th className="px-6 py-4 text-xs font-semibold tracking-wider text-left uppercase text-slate-600">
+                    Student Name
+                  </th>
+                  <th className="px-6 py-4 text-xs font-semibold tracking-wider text-left uppercase text-slate-600">
+                    Attendance Status
+                  </th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-100">
                 {rows.map((r) => (
-                  <tr key={r.id} className="border-b last:border-none">
-                    <td className="py-2 pr-3">{r.student_code}</td>
-                    <td className="py-2 pr-3">{r.name}</td>
-                    <td className="py-2 pr-3">
+                  <tr
+                    key={r.id}
+                    className="transition-colors duration-200 group hover:bg-slate-50/50"
+                  >
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center justify-center w-8 h-8 text-sm font-semibold text-blue-700 bg-blue-100 rounded-full">
+                          {r.student_code[0]}
+                        </div>
+                        <code className="font-mono text-sm font-semibold text-slate-900">
+                          {r.student_code}
+                        </code>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-slate-900">{r.name}</div>
+                    </td>
+                    <td className="px-6 py-4">
                       {canEdit ? (
-                        <div className="inline-flex gap-1">
-                          <button
-                            className={`px-2 py-1 rounded-md border ${
-                              r.status === "present"
-                                ? "bg-[hsl(var(--secondary))] text-white"
-                                : "bg-[hsl(var(--muted))]"
-                            } ${
-                              !editableNow
-                                ? "opacity-60 cursor-not-allowed"
-                                : ""
-                            }`}
-                            onClick={() =>
-                              editableNow && markOne(r.id, "present")
-                            }
+                        <div className="flex gap-2">
+                          <StatusButton
+                            status="present"
+                            currentStatus={r.status}
+                            onClick={() => markOne(r.id, "present")}
                             disabled={!editableNow}
-                          >
-                            Present
-                          </button>
-                          <button
-                            className={`px-2 py-1 rounded-md border ${
-                              r.status === "absent"
-                                ? "bg-[hsl(var(--destructive))] text-white"
-                                : "bg-[hsl(var(--muted))]"
-                            } ${
-                              !editableNow
-                                ? "opacity-60 cursor-not-allowed"
-                                : ""
-                            }`}
-                            onClick={() =>
-                              editableNow && markOne(r.id, "absent")
-                            }
+                          />
+                          <StatusButton
+                            status="absent"
+                            currentStatus={r.status}
+                            onClick={() => markOne(r.id, "absent")}
                             disabled={!editableNow}
-                          >
-                            Absent
-                          </button>
-                          <button
-                            className={`px-2 py-1 rounded-md border ${
-                              r.status === "late"
-                                ? "bg-[hsl(var(--accent))] text-white"
-                                : "bg-[hsl(var(--muted))]"
-                            } ${
-                              !editableNow
-                                ? "opacity-60 cursor-not-allowed"
-                                : ""
-                            }`}
-                            onClick={() => editableNow && markOne(r.id, "late")}
+                          />
+                          <StatusButton
+                            status="late"
+                            currentStatus={r.status}
+                            onClick={() => markOne(r.id, "late")}
                             disabled={!editableNow}
-                          >
-                            Late
-                          </button>
+                          />
                         </div>
                       ) : (
-                        <span className="text-[hsl(var(--muted-foreground))]">
-                          {r.status ?? "—"}
-                        </span>
+                        <Badge
+                          variant="outline"
+                          className={`border-slate-300 ${
+                            r.status === "present"
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              : r.status === "absent"
+                              ? "bg-rose-50 text-rose-700 border-rose-200"
+                              : r.status === "late"
+                              ? "bg-amber-50 text-amber-700 border-amber-200"
+                              : "text-slate-500"
+                          }`}
+                        >
+                          {r.status === "present" && (
+                            <CheckCircle className="w-3 h-3 mr-1" />
+                          )}
+                          {r.status === "absent" && (
+                            <XCircle className="w-3 h-3 mr-1" />
+                          )}
+                          {r.status === "late" && (
+                            <Clock className="w-3 h-3 mr-1" />
+                          )}
+                          {r.status?.toUpperCase() || "—"}
+                        </Badge>
                       )}
                     </td>
                   </tr>
                 ))}
+
                 {rows.length === 0 && !loading && (
                   <tr>
-                    <td
-                      colSpan={3}
-                      className="py-8 text-center text-[hsl(var(--muted-foreground))]"
-                    >
-                      No students for this class.
+                    <td colSpan={3} className="px-6 py-16 text-center">
+                      <div className="flex flex-col items-center gap-4">
+                        <div className="p-4 rounded-full bg-slate-100">
+                          <Users className="w-8 h-8 text-slate-400" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-slate-700">
+                            No students found
+                          </p>
+                          <p className="mt-1 text-sm text-slate-500">
+                            {selectedClassId
+                              ? "No students enrolled in this class"
+                              : "Please select a class first"}
+                          </p>
+                        </div>
+                      </div>
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
-          {!editableNow && canEdit && (
-            <div className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">
-              Editable only for <b>today</b> or <b>yesterday</b>.
-            </div>
-          )}
         </CardContent>
       </Card>
+
+      {/* Information Footer */}
+      {!editableNow && canEdit && (
+        <Card className="border-amber-200 bg-amber-50">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-2">
+              <Clock className="w-4 h-4 mt-0.5 text-amber-600" />
+              <div>
+                <div className="text-sm font-medium text-amber-800">
+                  Editing Restrictions
+                </div>
+                <div className="text-sm text-amber-700 mt-0.5">
+                  Attendance can only be edited for <b>today</b> or{" "}
+                  <b>yesterday</b>. To modify attendance for other dates, please
+                  contact the system administrator.
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

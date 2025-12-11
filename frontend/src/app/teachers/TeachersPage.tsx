@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { api } from "@/api/client";
 import { useApp } from "@/app/state/useApp";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +12,24 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import {
+  Users,
+  Search,
+  PlusCircle,
+  User,
+  Mail,
+  Key,
+  Phone,
+  BookOpen,
+  GraduationCap,
+  Loader2,
+  CheckCircle,
+  XCircle,
+  Lock,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 
 type UserRow = {
   id: string;
@@ -19,6 +37,7 @@ type UserRow = {
   email: string;
   role: string;
   isActive: boolean;
+  staffCode?: string;
   mustChangePassword?: boolean;
 };
 
@@ -35,6 +54,11 @@ type AllocSummaryItem = {
   className: string;
   subjects: string[];
 };
+
+interface ApiResponse {
+  data: any;
+  error?: string;
+}
 
 export default function TeachersPage() {
   const { classes } = useApp();
@@ -57,6 +81,7 @@ export default function TeachersPage() {
     staffCode: "",
     phone: "",
   });
+  const [showPassword, setShowPassword] = useState(false);
   const [createdTemp, setCreatedTemp] = useState<string | null>(null);
   const [addError, setAddError] = useState<string | null>(null);
 
@@ -68,10 +93,10 @@ export default function TeachersPage() {
   const [openAssign, setOpenAssign] = useState<string | null>(null);
   const [assignMatrix, setAssignMatrix] = useState<AssignmentItem[]>([]);
 
-  const loadTeachers = async () => {
+  const loadTeachers = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await api.get("/api/users", {
+      const { data } = await api.get<ApiResponse>("/api/users", {
         params: { role: "teacher" },
       });
       const list: UserRow[] = data.data || [];
@@ -80,16 +105,16 @@ export default function TeachersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const loadSubjects = async () => {
+  const loadSubjects = useCallback(async () => {
     try {
-      const { data } = await api.get("/api/subjects");
+      const { data } = await api.get<ApiResponse>("/api/subjects");
       setSubjects(data.data || []);
     } catch {
       setSubjects([]);
     }
-  };
+  }, []);
 
   const loadAllocSummary = async (teachers: UserRow[]) => {
     const result: Record<string, AllocSummaryItem[]> = {};
@@ -97,7 +122,9 @@ export default function TeachersPage() {
     await Promise.all(
       teachers.map(async (t) => {
         try {
-          const { data } = await api.get(`/api/users/${t.id}/assignments`);
+          const { data } = await api.get<ApiResponse>(
+            `/api/users/${t.id}/assignments`
+          );
           const arr: any[] = data.data || [];
           const byClass = new Map<
             string,
@@ -133,7 +160,7 @@ export default function TeachersPage() {
   useEffect(() => {
     loadTeachers();
     loadSubjects();
-  }, []);
+  }, [loadTeachers, loadSubjects]);
 
   const filtered = useMemo(
     () =>
@@ -146,7 +173,7 @@ export default function TeachersPage() {
   const addTeacher = async () => {
     setAddError(null);
     try {
-      const res = await api.post("/api/users", {
+      const res = await api.post<ApiResponse>("/api/users", {
         name: form.name.trim(),
         email: form.email.trim().toLowerCase(),
         password: form.password,
@@ -154,14 +181,14 @@ export default function TeachersPage() {
         staffCode: form.staffCode.trim() || undefined,
         phone: form.phone.trim() || undefined,
       });
-      const data = res.data as any;
-      setCreatedTemp(data?.tempPassword ?? form.password);
+      const data = res.data;
+      setCreatedTemp((data as any)?.tempPassword ?? form.password);
       setForm({ name: "", email: "", password: "", staffCode: "", phone: "" });
       setOpenAdd(false);
       await loadTeachers();
-    } catch (err: any) {
-      const status = err?.response?.status;
-      const msg = err?.response?.data?.error;
+    } catch (err: unknown) {
+      const status = (err as any)?.response?.status;
+      const msg = (err as any)?.response?.data?.error;
       if (status === 409) {
         setAddError(
           msg || "Email already in use. Please use a different email."
@@ -183,7 +210,9 @@ export default function TeachersPage() {
   // Allocate to Class
   const openAllocateFor = async (teacherId: string) => {
     setOpenAllocate(teacherId);
-    const { data } = await api.get(`/api/users/${teacherId}/classes`);
+    const { data } = await api.get<ApiResponse>(
+      `/api/users/${teacherId}/classes`
+    );
     const current: Klass[] = data.data || [];
     setAllocated(current.map((c) => c.id));
   };
@@ -206,7 +235,9 @@ export default function TeachersPage() {
   // Assign subjects × classes
   const openAssignFor = async (teacherId: string) => {
     setOpenAssign(teacherId);
-    const { data } = await api.get(`/api/users/${teacherId}/assignments`);
+    const { data } = await api.get<ApiResponse>(
+      `/api/users/${teacherId}/assignments`
+    );
     const existing = ((data.data || []) as any[]).map((x) => ({
       classId: x.klass.id,
       subjectId: x.subject.id,
@@ -242,17 +273,114 @@ export default function TeachersPage() {
   };
 
   return (
-    <div className="space-y-4">
-      {/* header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Teachers</h1>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-3">
+          <div className="rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 p-2.5 shadow-lg">
+            <Users className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">
+              Teacher Management
+            </h1>
+            <p className="text-sm text-slate-600">
+              Manage teachers, class allocations, and subject assignments
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card className="shadow-sm border-slate-200">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-600">
+                  Total Teachers
+                </p>
+                <p className="text-2xl font-bold text-slate-900">
+                  {rows.length}
+                </p>
+              </div>
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <Users className="w-5 h-5 text-blue-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm border-slate-200">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-600">Active</p>
+                <p className="text-2xl font-bold text-emerald-700">
+                  {rows.filter((r) => r.isActive).length}
+                </p>
+              </div>
+              <div className="p-2 rounded-lg bg-emerald-100">
+                <CheckCircle className="w-5 h-5 text-emerald-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm border-slate-200">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-600">
+                  Total Classes
+                </p>
+                <p className="text-2xl font-bold text-indigo-700">
+                  {classes.length}
+                </p>
+              </div>
+              <div className="p-2 bg-indigo-100 rounded-lg">
+                <GraduationCap className="w-5 h-5 text-indigo-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm border-slate-200">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-600">
+                  Total Subjects
+                </p>
+                <p className="text-2xl font-bold text-amber-700">
+                  {subjects.length}
+                </p>
+              </div>
+              <div className="p-2 rounded-lg bg-amber-100">
+                <BookOpen className="w-5 h-5 text-amber-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Controls Bar */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute w-4 h-4 -translate-y-1/2 left-3 top-1/2 text-slate-400" />
+            <Input
+              placeholder="Search by name or email…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              className="w-full h-10 pl-10 pr-4 text-sm border rounded-xl border-slate-300 sm:w-64"
+            />
+          </div>
+        </div>
+
+        {/* Action Button */}
         <div className="flex items-center gap-2">
-          <Input
-            placeholder="Search…"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            className="w-72"
-          />
           <Dialog
             open={openAdd}
             onOpenChange={(open) => {
@@ -260,27 +388,46 @@ export default function TeachersPage() {
               if (open) {
                 setAddError(null);
                 setCreatedTemp(null);
+                setShowPassword(false);
               }
             }}
           >
             <DialogTrigger asChild>
-              <Button>Add Teacher</Button>
+              <Button className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
+                <PlusCircle className="w-4 h-4" />
+                Add Teacher
+              </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-md rounded-2xl">
               <DialogHeader>
-                <DialogTitle>New Teacher</DialogTitle>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600">
+                    <User className="w-5 h-5 text-white" />
+                  </div>
+                  <DialogTitle className="text-lg font-semibold text-slate-800">
+                    Add New Teacher
+                  </DialogTitle>
+                </div>
               </DialogHeader>
-              <div className="grid gap-3">
-                <div className="grid gap-1.5">
-                  <Label>Name</Label>
+              <div className="grid gap-4 py-2">
+                <div className="grid gap-2">
+                  <Label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                    <User className="w-4 h-4 text-blue-600" />
+                    Full Name *
+                  </Label>
                   <Input
                     value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    placeholder="Full name"
+                    placeholder="Enter full name"
+                    className="rounded-lg border-slate-300"
                   />
                 </div>
-                <div className="grid gap-1.5">
-                  <Label>Email</Label>
+
+                <div className="grid gap-2">
+                  <Label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                    <Mail className="w-4 h-4 text-blue-600" />
+                    Email Address *
+                  </Label>
                   <Input
                     type="email"
                     value={form.email}
@@ -288,56 +435,101 @@ export default function TeachersPage() {
                       setForm({ ...form, email: e.target.value })
                     }
                     placeholder="teacher@school.org"
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label>Temporary Password</Label>
-                  <Input
-                    type="password"
-                    value={form.password}
-                    onChange={(e) =>
-                      setForm({ ...form, password: e.target.value })
-                    }
-                    placeholder="Temp password"
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label>Staff Code (optional)</Label>
-                  <Input
-                    value={form.staffCode}
-                    onChange={(e) =>
-                      setForm({ ...form, staffCode: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label>Phone (optional)</Label>
-                  <Input
-                    value={form.phone}
-                    onChange={(e) =>
-                      setForm({ ...form, phone: e.target.value })
-                    }
+                    className="rounded-lg border-slate-300"
                   />
                 </div>
 
+                <div className="grid gap-2">
+                  <Label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                    <Key className="w-4 h-4 text-blue-600" />
+                    Temporary Password *
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      value={form.password}
+                      onChange={(e) =>
+                        setForm({ ...form, password: e.target.value })
+                      }
+                      placeholder="Enter temporary password"
+                      className="pr-10 rounded-lg border-slate-300"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute -translate-y-1/2 right-3 top-1/2"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="w-4 h-4 text-slate-400" />
+                      ) : (
+                        <Eye className="w-4 h-4 text-slate-400" />
+                      )}
+                    </button>
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    Teacher will be asked to change this on first login
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-slate-700">
+                      Staff Code (optional)
+                    </Label>
+                    <Input
+                      value={form.staffCode}
+                      onChange={(e) =>
+                        setForm({ ...form, staffCode: e.target.value })
+                      }
+                      placeholder="e.g., STF001"
+                      className="rounded-lg border-slate-300"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-slate-700">
+                      Phone (optional)
+                    </Label>
+                    <div className="relative">
+                      <Phone className="absolute w-4 h-4 -translate-y-1/2 left-3 top-1/2 text-slate-400" />
+                      <Input
+                        value={form.phone}
+                        onChange={(e) =>
+                          setForm({ ...form, phone: e.target.value })
+                        }
+                        placeholder="+2659…"
+                        className="pl-10 rounded-lg border-slate-300"
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 {addError && (
-                  <div className="text-sm text-[hsl(var(--destructive))]">
+                  <div className="p-3 text-sm border rounded-lg text-rose-700 bg-rose-50 border-rose-200">
                     {addError}
                   </div>
                 )}
 
                 {createdTemp && (
-                  <div className="text-xs rounded-md border border-[hsl(var(--ring))] bg-[hsl(var(--ring))]/10 p-2">
-                    Temp password: <b>{createdTemp}</b>
+                  <div className="p-3 text-sm border rounded-lg text-emerald-700 bg-emerald-50 border-emerald-200">
+                    <div className="font-medium">
+                      Teacher created successfully!
+                    </div>
+                    <div className="mt-1">
+                      Temporary password:{" "}
+                      <span className="font-mono font-bold">{createdTemp}</span>
+                    </div>
+                    <div className="mt-1 text-xs text-emerald-600">
+                      Share this password with the teacher. They must change it
+                      on first login.
+                    </div>
                   </div>
                 )}
 
-                <div className="flex justify-end gap-2">
+                <div className="flex justify-end gap-3 pt-2">
                   <Button
                     variant="outline"
-                    onClick={() => {
-                      setOpenAdd(false);
-                    }}
+                    onClick={() => setOpenAdd(false)}
+                    className="h-10 px-6 rounded-xl border-slate-300"
                   >
                     Cancel
                   </Button>
@@ -348,8 +540,9 @@ export default function TeachersPage() {
                       !form.email.trim() ||
                       !form.password.trim()
                     }
+                    className="h-10 px-6 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
                   >
-                    Save
+                    Create Teacher
                   </Button>
                 </div>
               </div>
@@ -358,118 +551,220 @@ export default function TeachersPage() {
         </div>
       </div>
 
-      {/* table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            All Teachers{" "}
-            {loading && (
-              <span className="ml-2 text-sm text-[hsl(var(--muted-foreground))]">
-                Loading…
-              </span>
-            )}
-          </CardTitle>
+      {/* Teachers Table Card */}
+      <Card className="overflow-hidden shadow-lg border-slate-200">
+        <CardHeader className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-blue-50/30">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg shadow bg-gradient-to-br from-blue-500 to-indigo-600">
+                <Users className="w-5 h-5 text-white" />
+              </div>
+              <CardTitle className="text-lg font-semibold text-slate-800">
+                Teacher Directory
+              </CardTitle>
+            </div>
+            <div className="text-sm text-slate-600">
+              {loading ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Loading…
+                </div>
+              ) : (
+                `${filtered.length} teacher${filtered.length !== 1 ? "s" : ""}`
+              )}
+            </div>
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-left border-b">
-                <tr>
-                  <th className="py-2 pr-3">Name</th>
-                  <th className="py-2 pr-3">Email</th>
-                  <th className="py-2 pr-3">Classes & Subjects</th>
-                  <th className="py-2 pr-3">Status</th>
-                  <th className="py-2 pr-3">Actions</th>
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/50">
+                  <th className="px-6 py-4 text-xs font-semibold tracking-wider text-left uppercase text-slate-600">
+                    Teacher
+                  </th>
+                  <th className="px-6 py-4 text-xs font-semibold tracking-wider text-left uppercase text-slate-600">
+                    Allocations
+                  </th>
+                  <th className="px-6 py-4 text-xs font-semibold tracking-wider text-left uppercase text-slate-600">
+                    Status
+                  </th>
+                  <th className="px-6 py-4 text-xs font-semibold tracking-wider text-left uppercase text-slate-600">
+                    Actions
+                  </th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-100">
                 {filtered.map((u) => (
                   <tr
                     key={u.id}
-                    className="align-top border-b last:border-none"
+                    className="transition-colors duration-200 group hover:bg-slate-50/50"
                   >
-                    <td className="py-2 pr-3">{u.name}</td>
-                    <td className="py-2 pr-3">{u.email}</td>
-                    <td className="py-2 pr-3">
-                      {(allocSummary[u.id] || []).length === 0 ? (
-                        <span className="text-[hsl(var(--muted-foreground))] text-xs">
-                          No allocations
-                        </span>
-                      ) : (
-                        (allocSummary[u.id] || []).map((a, idx) => (
-                          <div key={idx} className="mb-2">
-                            <div className="text-sm font-medium">
-                              {a.className}{" "}
-                              <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                                ({a.subjects.length} subject
-                                {a.subjects.length !== 1 && "s"})
-                              </span>
-                            </div>
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {a.subjects.map((s) => (
-                                <span
-                                  key={s}
-                                  className="px-2 py-0.5 rounded-full bg-[hsl(var(--muted))] text-[10px] text-[hsl(var(--muted-foreground))]"
-                                >
-                                  {s}
-                                </span>
-                              ))}
-                            </div>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center justify-center w-10 h-10 text-sm font-semibold text-white rounded-full bg-gradient-to-br from-blue-500 to-indigo-600">
+                          {u.name
+                            .split(" ")
+                            .map((n) => n[0])
+                            .join("")
+                            .toUpperCase()}
+                        </div>
+                        <div>
+                          <div className="font-semibold text-slate-900">
+                            {u.name}
                           </div>
-                        ))
-                      )}
+                          <div className="text-sm text-slate-600">
+                            {u.email}
+                          </div>
+                          {u.staffCode && (
+                            <div className="text-xs text-slate-500 mt-0.5">
+                              Staff Code: {u.staffCode}
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </td>
-                    <td className="py-2 pr-3">
-                      {u.isActive ? (
-                        <span className="text-[hsl(var(--secondary))]">
-                          Active
-                        </span>
+                    <td className="px-6 py-4">
+                      {(allocSummary[u.id] || []).length === 0 ? (
+                        <div className="text-sm italic text-slate-500">
+                          No allocations yet
+                        </div>
                       ) : (
-                        <span className="text-[hsl(var(--muted-foreground))]">
-                          Inactive
-                        </span>
-                      )}
-                      {u.mustChangePassword && (
-                        <span className="ml-2 text-xs text-[hsl(var(--accent))]">
-                          first login
-                        </span>
+                        <div className="max-w-xs space-y-2">
+                          {(allocSummary[u.id] || []).map((a, idx) => (
+                            <div
+                              key={idx}
+                              className="p-2 transition-colors border rounded-lg border-slate-200 hover:border-blue-300 hover:bg-blue-50/30"
+                            >
+                              <div className="flex items-center gap-1.5 mb-1.5">
+                                <GraduationCap className="w-3.5 h-3.5 text-blue-600" />
+                                <span className="text-sm font-medium text-slate-800">
+                                  {a.className}
+                                </span>
+                                <Badge
+                                  variant="outline"
+                                  className="ml-auto text-xs border-slate-300"
+                                >
+                                  {a.subjects.length} subject
+                                  {a.subjects.length !== 1 && "s"}
+                                </Badge>
+                              </div>
+                              <div className="flex flex-wrap gap-1">
+                                {a.subjects.map((s) => (
+                                  <Badge
+                                    key={s}
+                                    variant="outline"
+                                    className="text-xs border-slate-300"
+                                  >
+                                    {s}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </td>
-                    <td className="py-2 pr-3">
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openAllocateFor(u.id)}
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col gap-1">
+                        <Badge
+                          className={`${
+                            u.isActive
+                              ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-0"
+                              : "bg-slate-100 text-slate-700 hover:bg-slate-100 border-0"
+                          }`}
                         >
-                          Allocate to Class
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openAssignFor(u.id)}
-                          disabled={subjects.length === 0}
-                        >
-                          Assign Subjects
-                        </Button>
+                          {u.isActive ? (
+                            <>
+                              <CheckCircle className="w-3 h-3 mr-1" />
+                              Active
+                            </>
+                          ) : (
+                            <>
+                              <XCircle className="w-3 h-3 mr-1" />
+                              Inactive
+                            </>
+                          )}
+                        </Badge>
+                        {u.mustChangePassword && (
+                          <Badge
+                            variant="outline"
+                            className="text-xs border-amber-300 text-amber-700"
+                          >
+                            <Lock className="w-2.5 h-2.5 mr-1" />
+                            First login required
+                          </Badge>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col gap-2">
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openAllocateFor(u.id)}
+                            className="flex items-center gap-1.5 rounded-lg border-slate-300 hover:bg-slate-50"
+                          >
+                            <GraduationCap className="w-3.5 h-3.5" />
+                            Allocate
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openAssignFor(u.id)}
+                            disabled={subjects.length === 0}
+                            className="flex items-center gap-1.5 rounded-lg border-slate-300 hover:bg-slate-50"
+                          >
+                            <BookOpen className="w-3.5 h-3.5" />
+                            Assign
+                          </Button>
+                        </div>
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => toggleActive(u)}
+                          className={`flex items-center gap-1.5 rounded-lg ${
+                            u.isActive
+                              ? "border-rose-300 text-rose-700 hover:bg-rose-50"
+                              : "border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                          }`}
                         >
-                          {u.isActive ? "Deactivate" : "Activate"}
+                          {u.isActive ? (
+                            <>
+                              <XCircle className="w-3.5 h-3.5" />
+                              Deactivate
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle className="w-3.5 h-3.5" />
+                              Activate
+                            </>
+                          )}
                         </Button>
                       </div>
                     </td>
                   </tr>
                 ))}
+
                 {filtered.length === 0 && !loading && (
                   <tr>
-                    <td
-                      colSpan={5}
-                      className="py-8 text-center text-[hsl(var(--muted-foreground))]"
-                    >
-                      No teachers
+                    <td colSpan={4} className="px-6 py-16 text-center">
+                      <div className="flex flex-col items-center gap-4">
+                        <div className="p-4 rounded-full bg-slate-100">
+                          <Users className="w-8 h-8 text-slate-400" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-slate-700">
+                            No teachers found
+                          </p>
+                          <p className="mt-1 text-sm text-slate-500">
+                            {q
+                              ? "Try adjusting your search"
+                              : "Start by adding a teacher"}
+                          </p>
+                        </div>
+                      </div>
                     </td>
                   </tr>
                 )}
@@ -479,78 +774,134 @@ export default function TeachersPage() {
         </CardContent>
       </Card>
 
-      {/* Allocate to Class */}
+      {/* Allocate to Class Dialog */}
       <Dialog
         open={!!openAllocate}
         onOpenChange={(v) => !v && setOpenAllocate(null)}
       >
-        <DialogContent>
+        <DialogContent className="max-w-md rounded-2xl">
           <DialogHeader>
-            <DialogTitle>Allocate to Class</DialogTitle>
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600">
+                <GraduationCap className="w-5 h-5 text-white" />
+              </div>
+              <DialogTitle className="text-lg font-semibold text-slate-800">
+                Allocate to Classes
+              </DialogTitle>
+            </div>
           </DialogHeader>
-          <div className="grid gap-2 overflow-auto max-h-72">
+          <div className="pr-2 space-y-3 overflow-auto max-h-72">
             {classes.map((c) => (
-              <label key={c.id} className="flex items-center gap-2 text-sm">
+              <div
+                key={c.id}
+                className="flex items-center gap-3 p-3 transition-colors border rounded-lg border-slate-200 hover:border-blue-300 hover:bg-blue-50/30"
+              >
                 <input
                   type="checkbox"
                   checked={allocated.includes(c.id)}
                   onChange={() => toggleAlloc(c.id)}
+                  className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
                 />
-                {c.name}
-                {c.stream ? ` ${c.stream}` : ""}
-                {c.year ? ` • ${c.year}` : ""}
-              </label>
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-slate-900">
+                    {c.name}
+                    {c.stream ? ` ${c.stream}` : ""}
+                  </div>
+                  {c.year && (
+                    <div className="text-xs text-slate-500">Year {c.year}</div>
+                  )}
+                </div>
+                {allocated.includes(c.id) && (
+                  <CheckCircle className="w-4 h-4 text-emerald-600" />
+                )}
+              </div>
             ))}
             {classes.length === 0 && (
-              <div className="text-sm text-[hsl(var(--muted-foreground))]">
-                No classes available
+              <div className="p-4 text-center text-slate-500">
+                <GraduationCap className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                <p className="text-sm">No classes available</p>
+                <p className="mt-1 text-xs">
+                  Add classes first to allocate teachers
+                </p>
               </div>
             )}
           </div>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setOpenAllocate(null)}>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              variant="outline"
+              onClick={() => setOpenAllocate(null)}
+              className="h-10 px-6 rounded-xl border-slate-300"
+            >
               Cancel
             </Button>
-            <Button onClick={saveAllocate}>Save</Button>
+            <Button
+              onClick={saveAllocate}
+              className="h-10 px-6 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+            >
+              Save Allocation
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Assign Subjects × Classes */}
+      {/* Assign Subjects × Classes Dialog */}
       <Dialog
         open={!!openAssign}
         onOpenChange={(v) => !v && setOpenAssign(null)}
       >
-        <DialogContent>
+        <DialogContent className="max-w-4xl rounded-2xl">
           <DialogHeader>
-            <DialogTitle>Assign Subjects to Classes</DialogTitle>
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600">
+                <BookOpen className="w-5 h-5 text-white" />
+              </div>
+              <DialogTitle className="text-lg font-semibold text-slate-800">
+                Assign Subjects to Classes
+              </DialogTitle>
+            </div>
           </DialogHeader>
           {subjects.length === 0 && (
-            <div className="text-sm text-[hsl(var(--muted-foreground))]">
-              No subjects yet. Add subjects first.
+            <div className="p-4 text-center text-slate-500">
+              <BookOpen className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+              <p className="text-sm">No subjects available</p>
+              <p className="mt-1 text-xs">
+                Add subjects first to assign to teachers
+              </p>
             </div>
           )}
           {subjects.length > 0 && (
-            <div className="space-y-4 overflow-auto max-h-80">
+            <div className="space-y-4 overflow-auto max-h-[60vh] pr-2">
               {classes.map((c) => (
-                <div key={c.id} className="p-3 border rounded-lg">
-                  <div className="mb-2 text-sm font-medium">
-                    {c.name}
-                    {c.stream ? ` ${c.stream}` : ""}
-                    {c.year ? ` • ${c.year}` : ""}
+                <div
+                  key={c.id}
+                  className="p-4 border rounded-xl border-slate-200 bg-gradient-to-r from-slate-50 to-blue-50/30"
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <GraduationCap className="w-4 h-4 text-blue-600" />
+                    <div className="text-sm font-semibold text-slate-800">
+                      {c.name}
+                      {c.stream ? ` ${c.stream}` : ""}
+                      {c.year && ` • Year ${c.year}`}
+                    </div>
                   </div>
-                  <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {subjects.map((s) => (
                       <label
                         key={s.id}
-                        className="flex items-center gap-2 text-sm"
+                        className="flex items-center gap-3 p-2.5 border rounded-lg border-slate-200 hover:border-blue-300 hover:bg-blue-50/30 transition-colors cursor-pointer"
                       >
                         <input
                           type="checkbox"
                           checked={isChecked(c.id, s.id)}
                           onChange={() => togglePair(c.id, s.id)}
+                          className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
                         />
-                        {s.name}
+                        <div className="flex-1 text-sm font-medium text-slate-700">
+                          {s.name}
+                        </div>
+                        {isChecked(c.id, s.id) && (
+                          <CheckCircle className="w-4 h-4 text-emerald-600" />
+                        )}
                       </label>
                     ))}
                   </div>
@@ -558,11 +909,21 @@ export default function TeachersPage() {
               ))}
             </div>
           )}
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setOpenAssign(null)}>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              variant="outline"
+              onClick={() => setOpenAssign(null)}
+              className="h-10 px-6 rounded-xl border-slate-300"
+            >
               Cancel
             </Button>
-            <Button onClick={saveAssign}>Save</Button>
+            <Button
+              onClick={saveAssign}
+              disabled={subjects.length === 0}
+              className="h-10 px-6 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+            >
+              Save Assignments
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

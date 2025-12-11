@@ -11,6 +11,31 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import {
+  Search,
+  UserPlus,
+  Mail,
+  Copy,
+  Edit,
+  Send,
+  UserCheck,
+  UserX,
+  Shield,
+  Eye,
+  FileText,
+  GraduationCap,
+  MoreVertical,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  Loader2,
+} from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type UserRow = {
   id: string;
@@ -21,11 +46,36 @@ type UserRow = {
   mustChangePassword?: boolean;
 };
 
-const ROLE_OPTIONS: Array<{ value: UserRow["role"]; label: string }> = [
-  { value: "admin", label: "Head Teacher (Admin)" },
-  { value: "teacher", label: "Teacher" },
-  { value: "bursar", label: "Bursar" },
-  { value: "viewer", label: "Viewer (Read-only)" },
+const ROLE_OPTIONS: Array<{
+  value: UserRow["role"];
+  label: string;
+  icon: React.ReactNode;
+  color: string;
+}> = [
+  {
+    value: "admin",
+    label: "Head Teacher (Admin)",
+    icon: <Shield className="w-4 h-4" />,
+    color: "from-purple-500 to-pink-500",
+  },
+  {
+    value: "teacher",
+    label: "Teacher",
+    icon: <GraduationCap className="w-4 h-4" />,
+    color: "from-blue-500 to-cyan-500",
+  },
+  {
+    value: "bursar",
+    label: "Bursar",
+    icon: <FileText className="w-4 h-4" />,
+    color: "from-emerald-500 to-green-500",
+  },
+  {
+    value: "viewer",
+    label: "Viewer (Read-only)",
+    icon: <Eye className="w-4 h-4" />,
+    color: "from-slate-500 to-slate-600",
+  },
 ];
 
 export default function UsersPage() {
@@ -83,6 +133,7 @@ export default function UsersPage() {
   const copy = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
+      // Could add toast notification here
     } catch {
       // ignore
     }
@@ -166,285 +217,485 @@ export default function UsersPage() {
     }
   };
 
-  return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Users</h1>
-        <div className="flex items-center gap-2">
-          <Input
-            placeholder="Search by name, email, role..."
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            className="w-72"
-          />
-          {/* ADD USER */}
-          <Dialog open={openAdd} onOpenChange={setOpenAdd}>
-            <DialogTrigger asChild>
-              <Button>Add User</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add User</DialogTitle>
-              </DialogHeader>
-              <div className="grid gap-3">
-                <div className="grid gap-1.5">
-                  <Label>Name</Label>
-                  <Input
-                    value={addForm.name}
-                    onChange={(e) =>
-                      setAddForm({ ...addForm, name: e.target.value })
-                    }
-                    placeholder="Full name"
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label>Email</Label>
-                  <Input
-                    type="email"
-                    value={addForm.email}
-                    onChange={(e) =>
-                      setAddForm({ ...addForm, email: e.target.value })
-                    }
-                    placeholder="user@school.org"
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label>Temporary Password</Label>
-                  <Input
-                    type="password"
-                    value={addForm.password}
-                    onChange={(e) =>
-                      setAddForm({ ...addForm, password: e.target.value })
-                    }
-                    placeholder="Temp password"
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label>Role</Label>
-                  <select
-                    className="h-10 rounded-md bg-[hsl(var(--input))] px-3 text-sm border border-[hsl(var(--border))]"
-                    value={addForm.role}
-                    onChange={(e) =>
-                      setAddForm({
-                        ...addForm,
-                        role: e.target.value as UserRow["role"],
-                      })
-                    }
-                  >
-                    {ROLE_OPTIONS.map((r) => (
-                      <option key={r.value} value={r.value}>
-                        {r.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex justify-end gap-2 mt-2">
-                  <Button variant="outline" onClick={() => setOpenAdd(false)}>
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={addUser}
-                    disabled={
-                      !addForm.name.trim() ||
-                      !addForm.email.trim() ||
-                      !addForm.password
-                    }
-                  >
-                    Save
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-        </div>
-      </div>
+  const getRoleBadge = (role: UserRow["role"]) => {
+    const roleConfig = ROLE_OPTIONS.find((r) => r.value === role);
+    if (!roleConfig) return null;
 
-      {/* Users table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            All Users{" "}
-            {loading && (
-              <span className="text-sm text-[hsl(var(--muted-foreground))] ml-2">
-                Loading…
-              </span>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-left border-b">
-                <tr>
-                  <th className="py-2 pr-3">Name</th>
-                  <th className="py-2 pr-3">Email</th>
-                  <th className="py-2 pr-3">Role</th>
-                  <th className="py-2 pr-3">Status</th>
-                  <th className="py-2 pr-3">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((u) => (
-                  <tr key={u.id} className="border-b last:border-none">
-                    <td className="py-2 pr-3">{u.name}</td>
-                    <td className="py-2 pr-3">
-                      {u.email}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="px-2 ml-2 text-xs h-7"
-                        onClick={() => copy(u.email)}
-                      >
-                        Copy
-                      </Button>
-                    </td>
-                    <td className="py-2 pr-3">
-                      {ROLE_OPTIONS.find((r) => r.value === u.role)?.label ||
-                        u.role}
-                    </td>
-                    <td className="py-2 pr-3">
-                      {u.isActive ? (
-                        <span className="text-[hsl(var(--secondary))]">
-                          Active
-                        </span>
-                      ) : (
-                        <span className="text-[hsl(var(--muted-foreground))]">
-                          Inactive
-                        </span>
-                      )}
-                      {u.mustChangePassword && (
-                        <span className="ml-2 text-xs text-[hsl(var(--accent))]">
-                          first login
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-2 pr-3">
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openEditDialog(u)}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => resendInvite(u.id)}
-                          disabled={sendingId === u.id}
-                        >
-                          {sendingId === u.id ? "Sending…" : "Resend Invite"}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => toggleActive(u)}
-                        >
-                          {u.isActive ? "Deactivate" : "Activate"}
-                        </Button>
-                        {tempShown?.id === u.id && (
-                          <span className="px-2 py-1 text-xs border rounded">
-                            Temp: <b>{tempShown.temp}</b>{" "}
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="ml-1 h-6 px-2 text-[10px]"
-                              onClick={() => copy(tempShown.temp)}
+    return (
+      <span
+        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-gradient-to-r ${roleConfig.color} text-white`}
+      >
+        {roleConfig.icon}
+        {roleConfig.label}
+      </span>
+    );
+  };
+
+  return (
+    <div className="min-h-screen p-6 bg-gradient-to-br from-slate-50 via-blue-50/20 to-indigo-50/30">
+      <div className="mx-auto space-y-6 max-w-7xl">
+        {/* Page Header */}
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg shadow-indigo-200/50">
+              <Shield className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight text-transparent bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text">
+                User Management
+              </h1>
+              <p className="text-sm text-slate-500 mt-0.5">
+                Manage user accounts and permissions
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Search and Add Card */}
+        <Card className="overflow-hidden border-none shadow-lg bg-white/80 backdrop-blur-sm rounded-2xl">
+          <CardContent className="p-6">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div className="relative flex-1 max-w-xl">
+                <Search className="absolute w-5 h-5 transform -translate-y-1/2 left-3 top-1/2 text-slate-400" />
+                <Input
+                  placeholder="Search users by name, email, or role..."
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  className="h-12 pl-10 border-slate-200 rounded-xl focus:border-indigo-400 focus:ring-indigo-400/20"
+                />
+              </div>
+
+              {/* ADD USER DIALOG */}
+              <Dialog open={openAdd} onOpenChange={setOpenAdd}>
+                <DialogTrigger asChild>
+                  <Button className="flex items-center h-12 gap-2 px-6 font-semibold text-white transition-all shadow-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 rounded-xl shadow-indigo-200/50 hover:shadow-xl">
+                    <UserPlus className="w-5 h-5" />
+                    Add New User
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-lg border-none shadow-2xl rounded-2xl">
+                  <DialogHeader>
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg shadow-md bg-gradient-to-br from-indigo-500 to-purple-600">
+                        <UserPlus className="w-5 h-5 text-white" />
+                      </div>
+                      <DialogTitle className="text-xl font-bold text-slate-800">
+                        Create New User
+                      </DialogTitle>
+                    </div>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid gap-2">
+                      <Label className="text-sm font-semibold text-slate-700">
+                        Full Name
+                      </Label>
+                      <Input
+                        value={addForm.name}
+                        onChange={(e) =>
+                          setAddForm({ ...addForm, name: e.target.value })
+                        }
+                        placeholder="Enter user's full name"
+                        className="h-11 border-slate-200 rounded-xl focus:border-indigo-400 focus:ring-indigo-400/20"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label className="text-sm font-semibold text-slate-700">
+                        Email Address
+                      </Label>
+                      <Input
+                        type="email"
+                        value={addForm.email}
+                        onChange={(e) =>
+                          setAddForm({ ...addForm, email: e.target.value })
+                        }
+                        placeholder="user@school.org"
+                        className="h-11 border-slate-200 rounded-xl focus:border-indigo-400 focus:ring-indigo-400/20"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label className="text-sm font-semibold text-slate-700">
+                        Temporary Password
+                      </Label>
+                      <Input
+                        type="password"
+                        value={addForm.password}
+                        onChange={(e) =>
+                          setAddForm({ ...addForm, password: e.target.value })
+                        }
+                        placeholder="Set temporary password"
+                        className="h-11 border-slate-200 rounded-xl focus:border-indigo-400 focus:ring-indigo-400/20"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label className="text-sm font-semibold text-slate-700">
+                        Role
+                      </Label>
+                      <div className="grid grid-cols-2 gap-3">
+                        {ROLE_OPTIONS.map((r) => (
+                          <button
+                            key={r.value}
+                            type="button"
+                            onClick={() =>
+                              setAddForm({
+                                ...addForm,
+                                role: r.value,
+                              })
+                            }
+                            className={`flex items-center gap-3 p-3 border rounded-xl transition-all ${
+                              addForm.role === r.value
+                                ? `border-indigo-500 bg-gradient-to-r ${r.color} bg-opacity-10`
+                                : "border-slate-200 hover:bg-slate-50"
+                            }`}
+                          >
+                            <div
+                              className={`p-2 rounded-lg bg-gradient-to-r ${r.color}`}
                             >
-                              Copy
-                            </Button>
+                              {r.icon}
+                            </div>
+                            <span className="text-sm font-medium text-slate-700">
+                              {r.label.split(" (")[0]}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-3">
+                    <Button
+                      variant="outline"
+                      onClick={() => setOpenAdd(false)}
+                      className="font-semibold h-11 rounded-xl"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={addUser}
+                      disabled={
+                        !addForm.name.trim() ||
+                        !addForm.email.trim() ||
+                        !addForm.password
+                      }
+                      className="font-semibold text-white h-11 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl disabled:opacity-50"
+                    >
+                      Create User
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Users Table Card */}
+        <Card className="overflow-hidden border-none shadow-xl bg-white/80 backdrop-blur-sm rounded-2xl">
+          <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-indigo-50/30 border-slate-100">
+            <CardTitle className="text-lg font-bold text-slate-800">
+              All Users
+              {loading && (
+                <span className="ml-3 text-sm font-normal text-slate-500">
+                  <Loader2 className="inline w-4 h-4 mr-1 animate-spin" />
+                  Loading...
+                </span>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b bg-slate-50/50 border-slate-100">
+                    <th className="px-6 py-4 text-xs font-bold tracking-wider text-left uppercase text-slate-600">
+                      User
+                    </th>
+                    <th className="px-6 py-4 text-xs font-bold tracking-wider text-left uppercase text-slate-600">
+                      Email
+                    </th>
+                    <th className="px-6 py-4 text-xs font-bold tracking-wider text-left uppercase text-slate-600">
+                      Role
+                    </th>
+                    <th className="px-6 py-4 text-xs font-bold tracking-wider text-left uppercase text-slate-600">
+                      Status
+                    </th>
+                    <th className="px-6 py-4 text-xs font-bold tracking-wider text-left uppercase text-slate-600">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filtered.map((u) => (
+                    <tr
+                      key={u.id}
+                      className="transition-colors hover:bg-slate-50/50 group"
+                    >
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-slate-100 to-slate-200">
+                            <span className="font-semibold text-slate-700">
+                              {u.name.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="font-semibold text-slate-900">
+                              {u.name}
+                            </span>
+                            {u.mustChangePassword && (
+                              <div className="flex items-center gap-1 mt-1">
+                                <AlertCircle className="w-3 h-3 text-amber-500" />
+                                <span className="text-xs text-amber-600">
+                                  First login required
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <Mail className="w-4 h-4 text-slate-400" />
+                          <span className="text-slate-600">{u.email}</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="p-1.5 h-7 w-7 hover:bg-slate-100"
+                            onClick={() => copy(u.email)}
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">{getRoleBadge(u.role)}</td>
+                      <td className="px-6 py-4">
+                        {u.isActive ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-600/20">
+                            <CheckCircle className="w-3.5 h-3.5" />
+                            Active
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">
+                            <XCircle className="w-3.5 h-3.5" />
+                            Inactive
                           </span>
                         )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {filtered.length === 0 && !loading && (
-                  <tr>
-                    <td
-                      colSpan={5}
-                      className="py-8 text-center text-[hsl(var(--muted-foreground))]"
-                    >
-                      No users found.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openEditDialog(u)}
+                            className="px-4 text-xs font-semibold transition-all rounded-lg h-9 border-slate-200 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200"
+                          >
+                            <Edit className="w-3.5 h-3.5 mr-1.5" />
+                            Edit
+                          </Button>
 
-      {/* Edit user dialog */}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => resendInvite(u.id)}
+                            disabled={sendingId === u.id}
+                            className="px-4 text-xs font-semibold transition-all rounded-lg h-9 border-slate-200 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200"
+                          >
+                            {sendingId === u.id ? (
+                              <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                            ) : (
+                              <Send className="w-3.5 h-3.5 mr-1.5" />
+                            )}
+                            {sendingId === u.id
+                              ? "Sending..."
+                              : "Resend Invite"}
+                          </Button>
+
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="p-1.5 h-9 w-9 hover:bg-slate-100"
+                              >
+                                <MoreVertical className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                              <DropdownMenuItem onClick={() => toggleActive(u)}>
+                                {u.isActive ? (
+                                  <>
+                                    <UserX className="w-4 h-4 mr-2" />
+                                    Deactivate Account
+                                  </>
+                                ) : (
+                                  <>
+                                    <UserCheck className="w-4 h-4 mr-2" />
+                                    Activate Account
+                                  </>
+                                )}
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+
+                          {tempShown?.id === u.id && (
+                            <div className="px-3 py-2 ml-2 text-xs border rounded-lg border-emerald-200 bg-emerald-50">
+                              <div className="font-semibold text-emerald-800">
+                                Temporary Password
+                              </div>
+                              <div className="flex items-center gap-2 mt-1">
+                                <code className="px-2 py-1 font-mono rounded text-emerald-700 bg-emerald-100">
+                                  {tempShown.temp}
+                                </code>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="p-1.5 h-7 w-7 hover:bg-emerald-100"
+                                  onClick={() => copy(tempShown.temp)}
+                                >
+                                  <Copy className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {filtered.length === 0 && !loading && (
+                    <tr>
+                      <td colSpan={5} className="py-16 text-center">
+                        <div className="flex flex-col items-center gap-3">
+                          <div className="p-4 rounded-full bg-slate-100">
+                            <Shield className="w-8 h-8 text-slate-400" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-slate-600">
+                              No users found
+                            </p>
+                            <p className="mt-1 text-sm text-slate-400">
+                              {q
+                                ? "Try a different search term"
+                                : "Create your first user to get started"}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Edit User Dialog */}
       <Dialog open={openEdit} onOpenChange={(v) => !v && setOpenEdit(false)}>
-        <DialogContent>
+        <DialogContent className="max-w-lg border-none shadow-2xl rounded-2xl">
           <DialogHeader>
-            <DialogTitle>Edit User</DialogTitle>
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg shadow-md bg-gradient-to-br from-indigo-500 to-purple-600">
+                <Edit className="w-5 h-5 text-white" />
+              </div>
+              <DialogTitle className="text-xl font-bold text-slate-800">
+                Edit User
+              </DialogTitle>
+            </div>
           </DialogHeader>
           {editUser && (
-            <div className="grid gap-3">
-              <div className="grid gap-1.5">
-                <Label>Name</Label>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label className="text-sm font-semibold text-slate-700">
+                  Full Name
+                </Label>
                 <Input
                   value={editForm.name}
                   onChange={(e) =>
                     setEditForm({ ...editForm, name: e.target.value })
                   }
+                  className="h-11 border-slate-200 rounded-xl focus:border-indigo-400 focus:ring-indigo-400/20"
                 />
               </div>
-              <div className="grid gap-1.5">
-                <Label>Email</Label>
+              <div className="grid gap-2">
+                <Label className="text-sm font-semibold text-slate-700">
+                  Email Address
+                </Label>
                 <Input
                   type="email"
                   value={editForm.email}
                   onChange={(e) =>
                     setEditForm({ ...editForm, email: e.target.value })
                   }
+                  className="h-11 border-slate-200 rounded-xl focus:border-indigo-400 focus:ring-indigo-400/20"
                 />
               </div>
-              <div className="grid gap-1.5">
-                <Label>Role</Label>
-                <select
-                  className="h-10 rounded-md bg-[hsl(var(--input))] px-3 text-sm border border-[hsl(var(--border))]"
-                  value={editForm.role}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      role: e.target.value as UserRow["role"],
-                    })
-                  }
-                >
+              <div className="grid gap-2">
+                <Label className="text-sm font-semibold text-slate-700">
+                  Role
+                </Label>
+                <div className="grid grid-cols-2 gap-3">
                   {ROLE_OPTIONS.map((r) => (
-                    <option key={r.value} value={r.value}>
-                      {r.label}
-                    </option>
+                    <button
+                      key={r.value}
+                      type="button"
+                      onClick={() =>
+                        setEditForm({
+                          ...editForm,
+                          role: r.value,
+                        })
+                      }
+                      className={`flex items-center gap-3 p-3 border rounded-xl transition-all ${
+                        editForm.role === r.value
+                          ? `border-indigo-500 bg-gradient-to-r ${r.color} bg-opacity-10`
+                          : "border-slate-200 hover:bg-slate-50"
+                      }`}
+                    >
+                      <div
+                        className={`p-2 rounded-lg bg-gradient-to-r ${r.color}`}
+                      >
+                        {r.icon}
+                      </div>
+                      <span className="text-sm font-medium text-slate-700">
+                        {r.label.split(" (")[0]}
+                      </span>
+                    </button>
                   ))}
-                </select>
+                </div>
               </div>
-              <div className="grid gap-1.5">
-                <label className="inline-flex items-center gap-2 text-sm">
+              <div className="grid gap-2">
+                <label className="inline-flex items-center gap-3 px-4 py-3 transition-all border border-indigo-100 cursor-pointer bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl hover:from-indigo-100 hover:to-purple-100">
                   <input
                     type="checkbox"
+                    className="w-5 h-5 text-indigo-600 border-indigo-300 rounded focus:ring-2 focus:ring-indigo-500 focus:ring-offset-0"
                     checked={editForm.isActive}
                     onChange={(e) =>
                       setEditForm({ ...editForm, isActive: e.target.checked })
                     }
                   />
-                  Active account
+                  <span className="text-sm font-medium text-slate-700">
+                    Active account
+                  </span>
                 </label>
               </div>
 
-              <div className="flex justify-end gap-2 mt-2">
+              <div className="flex justify-end gap-3">
                 <Button
                   variant="outline"
                   onClick={() => setOpenEdit(false)}
                   disabled={savingEdit}
+                  className="font-semibold h-11 rounded-xl"
                 >
                   Cancel
                 </Button>
-                <Button onClick={saveEdit} disabled={savingEdit}>
-                  {savingEdit ? "Saving..." : "Save"}
+                <Button
+                  onClick={saveEdit}
+                  disabled={savingEdit}
+                  className="font-semibold text-white h-11 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl"
+                >
+                  {savingEdit ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    "Save Changes"
+                  )}
                 </Button>
               </div>
             </div>

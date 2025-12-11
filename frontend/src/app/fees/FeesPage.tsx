@@ -12,6 +12,20 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import {
+  DollarSign,
+  Search,
+  Calendar,
+  User,
+  FileText,
+  CreditCard,
+  Receipt,
+  PlusCircle,
+  Loader2,
+  CheckCircle,
+  AlertCircle,
+  Clock,
+} from "lucide-react";
 
 type Invoice = {
   id: string;
@@ -193,10 +207,45 @@ export default function FeesPage() {
   }, [selectedClassId, loadFees]);
 
   // ---------- helpers ----------
-  const studentLabel = (id: string): string => {
-    const info = students[id];
-    if (!info) return id;
-    return `${info.code} • ${info.name}`;
+  const studentLabel = useCallback(
+    (id: string): string => {
+      const info = students[id];
+      if (!info) return id;
+      return `${info.code} • ${info.name}`;
+    },
+    [students]
+  );
+
+  const getStatusBadge = (status: string) => {
+    switch (status.toLowerCase()) {
+      case "paid":
+        return (
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+            <CheckCircle size={12} />
+            Paid
+          </span>
+        );
+      case "partial":
+        return (
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">
+            <AlertCircle size={12} />
+            Partial
+          </span>
+        );
+      case "unpaid":
+        return (
+          <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-700">
+            <Clock size={12} />
+            Unpaid
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+            {status}
+          </span>
+        );
+    }
   };
 
   const filteredInvoices = useMemo(() => {
@@ -205,7 +254,7 @@ export default function FeesPage() {
       const label = studentLabel(i.studentId).toLowerCase();
       return s ? (label + i.status + i.id).toLowerCase().includes(s) : true;
     });
-  }, [invoices, q, students]);
+  }, [invoices, q, studentLabel]);
 
   const filteredPayments = useMemo(() => {
     const s = q.toLowerCase();
@@ -217,7 +266,7 @@ export default function FeesPage() {
             .includes(s)
         : true;
     });
-  }, [payments, q, students]);
+  }, [payments, q, studentLabel]);
 
   // ---------- class-aware student search for dialogs ----------
   const searchStudents = useCallback(
@@ -283,7 +332,7 @@ export default function FeesPage() {
           id: i.id,
           label: `${i.id.slice(0, 8)} • ${String(
             i.status || ""
-          ).toUpperCase()} • ${Number(i.amount).toLocaleString()}`,
+          ).toUpperCase()} • MWK ${Number(i.amount).toLocaleString()}`,
           amount: Number(i.amount),
         })) ?? [];
 
@@ -355,6 +404,7 @@ export default function FeesPage() {
         table{border-collapse:collapse;width:100%;margin-top:12px}
         th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}
         th{background:#f3f4f6}
+        .currency{font-weight:bold;color:#059669}
       </style>
       </head><body>
         <div class="head">
@@ -369,14 +419,15 @@ export default function FeesPage() {
     }</td></tr>
             <tr><th>Invoice</th><td>${r.invoice.id || "-"} • ${
       r.invoice.status || "-"
-    } • Amount: ${
+    } • Amount: <span class="currency">MWK ${
       r.invoice.amount != null ? Number(r.invoice.amount).toLocaleString() : "-"
-    }</td></tr>
-            <tr><th>Payment Amount</th><td>${Number(
+    }</span></td></tr>
+            <tr><th>Payment Amount</th><td><span class="currency">MWK ${Number(
               r.amount
-            ).toLocaleString()}</td></tr>
+            ).toLocaleString()}</span></td></tr>
             <tr><th>Method</th><td>${r.method || "-"}</td></tr>
             <tr><th>Reference</th><td>${r.reference || "-"}</td></tr>
+            <tr><th>Currency</th><td>Malawian Kwacha (MWK)</td></tr>
           </tbody>
         </table>
         <p class="muted">Thank you.</p>
@@ -387,68 +438,208 @@ export default function FeesPage() {
     w.print();
   };
 
+  // Calculate totals
+  const invoiceTotals = useMemo(() => {
+    const total = invoices.reduce((sum, inv) => sum + inv.amount, 0);
+    const paid = invoices
+      .filter((inv) => inv.status === "paid")
+      .reduce((sum, inv) => sum + inv.amount, 0);
+    const pending = invoices
+      .filter((inv) => inv.status === "unpaid")
+      .reduce((sum, inv) => sum + inv.amount, 0);
+    const partial = invoices
+      .filter((inv) => inv.status === "partial")
+      .reduce((sum, inv) => sum + inv.amount, 0);
+
+    return { total, paid, pending, partial };
+  }, [invoices]);
+
+  const paymentTotal = useMemo(() => {
+    return payments.reduce((sum, payment) => sum + payment.amount, 0);
+  }, [payments]);
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Fees</h1>
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-3">
+          <div className="rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 p-2.5 shadow-lg">
+            <DollarSign className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">
+              Fees Management
+            </h1>
+            <p className="text-sm text-slate-600">
+              Manage student invoices and payments
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card className="shadow-sm border-slate-200">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-600">
+                  Total Invoices
+                </p>
+                <p className="text-2xl font-bold text-slate-900">
+                  MWK {invoiceTotals.total.toLocaleString()}
+                </p>
+              </div>
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <FileText className="w-5 h-5 text-blue-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm border-slate-200">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-600">
+                  Paid Invoices
+                </p>
+                <p className="text-2xl font-bold text-emerald-700">
+                  MWK {invoiceTotals.paid.toLocaleString()}
+                </p>
+              </div>
+              <div className="p-2 rounded-lg bg-emerald-100">
+                <CheckCircle className="w-5 h-5 text-emerald-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm border-slate-200">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-600">Pending</p>
+                <p className="text-2xl font-bold text-rose-700">
+                  MWK {invoiceTotals.pending.toLocaleString()}
+                </p>
+              </div>
+              <div className="p-2 rounded-lg bg-rose-100">
+                <Clock className="w-5 h-5 text-rose-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm border-slate-200">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-600">
+                  Total Payments
+                </p>
+                <p className="text-2xl font-bold text-indigo-700">
+                  MWK {paymentTotal.toLocaleString()}
+                </p>
+              </div>
+              <div className="p-2 bg-indigo-100 rounded-lg">
+                <CreditCard className="w-5 h-5 text-indigo-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Controls Bar */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           {/* Term selector */}
-          <select
-            className="h-9 rounded-md bg-[hsl(var(--input))] px-3 text-sm border border-[hsl(var(--border))] shadow-sm"
-            value={termId}
-            onChange={(e) => setTermId(e.target.value)}
-          >
-            <option value="">All Terms</option>
-            {terms.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.year} • {t.name}
-                {t.isActive ? " (Active)" : ""}
-              </option>
-            ))}
-          </select>
-          <Input
-            placeholder="Search by student or status…"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            className="w-56"
-          />
+          <div className="relative">
+            <Calendar className="absolute w-4 h-4 -translate-y-1/2 left-3 top-1/2 text-slate-400" />
+            <select
+              className="h-10 pl-10 pr-4 text-sm transition-all duration-200 bg-white border shadow-sm cursor-pointer rounded-xl border-slate-300 hover:border-blue-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none"
+              value={termId}
+              onChange={(e) => setTermId(e.target.value)}
+            >
+              <option value="">All Terms</option>
+              {terms.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.year} • {t.name}
+                  {t.isActive ? " (Active)" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute w-4 h-4 -translate-y-1/2 left-3 top-1/2 text-slate-400" />
+            <Input
+              placeholder="Search by student or status…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              className="w-full h-10 pl-10 pr-4 text-sm border rounded-xl border-slate-300 sm:w-64"
+            />
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2">
           {/* Add Invoice */}
           <Dialog open={openInv} onOpenChange={setOpenInv}>
             <DialogTrigger asChild>
-              <Button>Add Invoice</Button>
+              <Button className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
+                <PlusCircle className="w-4 h-4" />
+                Add Invoice
+              </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="rounded-2xl">
               <DialogHeader>
-                <DialogTitle>Create Invoice</DialogTitle>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600">
+                    <FileText className="w-5 h-5 text-white" />
+                  </div>
+                  <DialogTitle className="text-lg font-semibold text-slate-800">
+                    Create New Invoice
+                  </DialogTitle>
+                </div>
               </DialogHeader>
-              <div className="grid gap-3">
-                <div className="grid gap-1.5">
-                  <Label>Student (from selected class)</Label>
-                  <Input
-                    placeholder={
-                      selectedClassId
-                        ? "Type to search student…"
-                        : "Select a class first (top bar)"
-                    }
-                    value={selectedStudent ? selectedStudent.label : studQuery}
-                    onChange={(e) => {
-                      setSelectedStudent(null);
-                      setStudQuery(e.target.value);
-                    }}
-                    disabled={!selectedClassId}
-                  />
+              <div className="grid gap-4 py-2">
+                <div className="grid gap-2">
+                  <Label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                    <User className="w-4 h-4 text-blue-600" />
+                    Student (from selected class)
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      placeholder={
+                        selectedClassId
+                          ? "Type to search student…"
+                          : "Select a class first (top bar)"
+                      }
+                      value={
+                        selectedStudent ? selectedStudent.label : studQuery
+                      }
+                      onChange={(e) => {
+                        setSelectedStudent(null);
+                        setStudQuery(e.target.value);
+                      }}
+                      disabled={!selectedClassId}
+                      className="pl-10 pr-4 border h-11 rounded-xl border-slate-300"
+                    />
+                    <User className="absolute w-4 h-4 -translate-y-1/2 left-3 top-1/2 text-slate-400" />
+                  </div>
                   {selectedStudent === null && studQuery && selectedClassId && (
-                    <div className="mt-1 overflow-auto bg-white border rounded-md max-h-40">
+                    <div className="mt-1 overflow-auto bg-white border shadow-sm border-slate-200 rounded-xl max-h-40">
                       {studOpts.length === 0 && (
-                        <div className="px-3 py-2 text-sm text-gray-500">
-                          No matches
+                        <div className="px-3 py-2 text-sm text-slate-500">
+                          No students found
                         </div>
                       )}
                       {studOpts.map((opt) => (
                         <div
                           key={opt.id}
-                          className="px-3 py-2 text-sm cursor-pointer hover:bg-gray-100"
+                          className="px-3 py-2.5 text-sm cursor-pointer hover:bg-slate-50 border-b border-slate-100 last:border-b-0"
                           onClick={() => {
                             setSelectedStudent(opt);
                             setStudQuery(opt.label);
@@ -460,24 +651,45 @@ export default function FeesPage() {
                     </div>
                   )}
                 </div>
-                <div className="grid gap-1.5">
-                  <Label>Amount (required fee for this term)</Label>
-                  <Input
-                    type="number"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    placeholder="e.g. 400000"
-                  />
+
+                <div className="grid gap-2">
+                  <Label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                    <DollarSign className="w-4 h-4 text-emerald-600" />
+                    Amount
+                  </Label>
+                  <div className="relative">
+                    <div className="absolute font-medium -translate-y-1/2 left-3 top-1/2 text-slate-600">
+                      MWK
+                    </div>
+                    <Input
+                      type="number"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      placeholder="e.g., 400,000"
+                      className="pr-4 border h-11 rounded-xl border-slate-300 pl-14"
+                    />
+                  </div>
+                  {amount && Number(amount) > 0 && (
+                    <div className="text-xs font-medium text-emerald-600">
+                      {Number(amount).toLocaleString()} Malawian Kwacha
+                    </div>
+                  )}
                 </div>
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setOpenInv(false)}>
+
+                <div className="flex justify-end gap-3 pt-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setOpenInv(false)}
+                    className="h-10 px-6 rounded-xl border-slate-300"
+                  >
                     Cancel
                   </Button>
                   <Button
                     onClick={addInvoice}
                     disabled={!selectedStudent || !amount}
+                    className="h-10 px-6 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
                   >
-                    Save
+                    Create Invoice
                   </Button>
                 </div>
               </div>
@@ -487,41 +699,61 @@ export default function FeesPage() {
           {/* Record Payment */}
           <Dialog open={openPay} onOpenChange={setOpenPay}>
             <DialogTrigger asChild>
-              <Button variant="outline">Record Payment</Button>
+              <Button
+                variant="outline"
+                className="flex items-center gap-2 text-blue-700 border-blue-300 rounded-xl hover:bg-blue-50"
+              >
+                <CreditCard className="w-4 h-4" />
+                Record Payment
+              </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-md rounded-2xl">
               <DialogHeader>
-                <DialogTitle>Record Payment</DialogTitle>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600">
+                    <CreditCard className="w-5 h-5 text-white" />
+                  </div>
+                  <DialogTitle className="text-lg font-semibold text-slate-800">
+                    Record Payment
+                  </DialogTitle>
+                </div>
               </DialogHeader>
-              <div className="grid gap-3">
-                <div className="grid gap-1.5">
-                  <Label>Student (from selected class)</Label>
-                  <Input
-                    placeholder={
-                      selectedClassId
-                        ? "Type to search student…"
-                        : "Select a class first (top bar)"
-                    }
-                    value={payStudent ? payStudent.label : payStudentQuery}
-                    onChange={(e) => {
-                      setPayStudent(null);
-                      setPayStudentQuery(e.target.value);
-                    }}
-                    disabled={!selectedClassId}
-                  />
+              <div className="grid gap-4 py-2">
+                <div className="grid gap-2">
+                  <Label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                    <User className="w-4 h-4 text-blue-600" />
+                    Student
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      placeholder={
+                        selectedClassId
+                          ? "Type to search student…"
+                          : "Select a class first (top bar)"
+                      }
+                      value={payStudent ? payStudent.label : payStudentQuery}
+                      onChange={(e) => {
+                        setPayStudent(null);
+                        setPayStudentQuery(e.target.value);
+                      }}
+                      disabled={!selectedClassId}
+                      className="pl-10 pr-4 border h-11 rounded-xl border-slate-300"
+                    />
+                    <User className="absolute w-4 h-4 -translate-y-1/2 left-3 top-1/2 text-slate-400" />
+                  </div>
                   {payStudent === null &&
                     payStudentQuery &&
                     selectedClassId && (
-                      <div className="mt-1 overflow-auto bg-white border rounded-md max-h-40">
+                      <div className="mt-1 overflow-auto bg-white border shadow-sm border-slate-200 rounded-xl max-h-40">
                         {payStudOpts.length === 0 && (
-                          <div className="px-3 py-2 text-sm text-gray-500">
-                            No matches
+                          <div className="px-3 py-2 text-sm text-slate-500">
+                            No students found
                           </div>
                         )}
                         {payStudOpts.map((opt) => (
                           <div
                             key={opt.id}
-                            className="px-3 py-2 text-sm cursor-pointer hover:bg-gray-100"
+                            className="px-3 py-2.5 text-sm cursor-pointer hover:bg-slate-50 border-b border-slate-100 last:border-b-0"
                             onClick={() => {
                               setPayStudent(opt);
                               setPayStudentQuery(opt.label);
@@ -533,56 +765,93 @@ export default function FeesPage() {
                       </div>
                     )}
                 </div>
-                <div className="grid gap-1.5">
-                  <Label>Invoice</Label>
+
+                <div className="grid gap-2">
+                  <Label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                    <FileText className="w-4 h-4 text-indigo-600" />
+                    Invoice
+                  </Label>
+                  <div className="relative">
+                    <select
+                      className="w-full pl-10 pr-4 text-sm transition-all duration-200 bg-white border shadow-sm cursor-pointer h-11 rounded-xl border-slate-300 hover:border-indigo-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 focus:outline-none"
+                      value={selectedInvId}
+                      onChange={(e) => setSelectedInvId(e.target.value)}
+                      disabled={!payStudent || invOpts.length === 0}
+                    >
+                      {invOpts.length === 0 && (
+                        <option value="">No invoices for this student</option>
+                      )}
+                      {invOpts.map((i) => (
+                        <option key={i.id} value={i.id}>
+                          {i.label}
+                        </option>
+                      ))}
+                    </select>
+                    <FileText className="absolute w-4 h-4 -translate-y-1/2 left-3 top-1/2 text-slate-400" />
+                  </div>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                    <DollarSign className="w-4 h-4 text-emerald-600" />
+                    Amount
+                  </Label>
+                  <div className="relative">
+                    <div className="absolute font-medium -translate-y-1/2 left-3 top-1/2 text-slate-600">
+                      MWK
+                    </div>
+                    <Input
+                      type="number"
+                      value={payAmount}
+                      onChange={(e) => setPayAmount(e.target.value)}
+                      className="pr-4 border h-11 rounded-xl border-slate-300 pl-14"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label className="text-sm font-semibold text-slate-700">
+                    Payment Method
+                  </Label>
                   <select
-                    className="h-10 rounded-md bg-[hsl(var(--input))] px-3 text-sm border border-[hsl(var(--border))]"
-                    value={selectedInvId}
-                    onChange={(e) => setSelectedInvId(e.target.value)}
-                    disabled={!payStudent || invOpts.length === 0}
-                  >
-                    {invOpts.length === 0 && (
-                      <option value="">No invoices for this student</option>
-                    )}
-                    {invOpts.map((i) => (
-                      <option key={i.id} value={i.id}>
-                        {i.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="grid gap-1.5">
-                  <Label>Amount</Label>
-                  <Input
-                    type="number"
-                    value={payAmount}
-                    onChange={(e) => setPayAmount(e.target.value)}
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label>Method (optional)</Label>
-                  <Input
+                    className="px-4 text-sm transition-all duration-200 bg-white border shadow-sm cursor-pointer h-11 rounded-xl border-slate-300 hover:border-blue-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none"
                     value={payMethod}
                     onChange={(e) => setPayMethod(e.target.value)}
-                    placeholder="cash / bank / mobile money"
-                  />
+                  >
+                    <option value="">Select method</option>
+                    <option value="cash">Cash</option>
+                    <option value="bank">Bank Transfer</option>
+                    <option value="mobile_money">Mobile Money</option>
+                    <option value="cheque">Cheque</option>
+                  </select>
                 </div>
-                <div className="grid gap-1.5">
-                  <Label>Reference (optional)</Label>
+
+                <div className="grid gap-2">
+                  <Label className="text-sm font-semibold text-slate-700">
+                    Reference (Optional)
+                  </Label>
                   <Input
                     value={payRef}
                     onChange={(e) => setPayRef(e.target.value)}
+                    placeholder="e.g., receipt number"
+                    className="border h-11 rounded-xl border-slate-300"
                   />
                 </div>
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setOpenPay(false)}>
+
+                <div className="flex justify-end gap-3 pt-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setOpenPay(false)}
+                    className="h-10 px-6 rounded-xl border-slate-300"
+                  >
                     Cancel
                   </Button>
                   <Button
                     onClick={addPayment}
                     disabled={!payStudent || !selectedInvId || !payAmount}
+                    className="h-10 px-6 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700"
                   >
-                    Save
+                    Record Payment
                   </Button>
                 </div>
               </div>
@@ -591,52 +860,109 @@ export default function FeesPage() {
         </div>
       </div>
 
-      {/* Invoices list */}
-      <Card className="border-none shadow-sm bg-white/95 rounded-2xl">
-        <CardHeader>
-          <CardTitle>
-            Invoices{" "}
-            {loading && (
-              <span className="ml-2 text-sm text-gray-500">Loading…</span>
-            )}
-          </CardTitle>
+      {/* Invoices Card */}
+      <Card className="overflow-hidden shadow-lg border-slate-200">
+        <CardHeader className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-blue-50/30">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg shadow bg-gradient-to-br from-blue-500 to-indigo-600">
+                <FileText className="w-5 h-5 text-white" />
+              </div>
+              <CardTitle className="text-lg font-semibold text-slate-800">
+                Invoices
+              </CardTitle>
+            </div>
+            <div className="text-sm text-slate-600">
+              {loading ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Loading…
+                </div>
+              ) : (
+                `${filteredInvoices.length} invoice${
+                  filteredInvoices.length !== 1 ? "s" : ""
+                }`
+              )}
+            </div>
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-left border-b">
-                <tr>
-                  <th className="py-2 pr-3">ID</th>
-                  <th className="py-2 pr-3">Student</th>
-                  <th className="py-2 pr-3">Amount</th>
-                  <th className="py-2 pr-3">Status</th>
-                  <th className="py-2 pr-3">Issued</th>
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/50">
+                  <th className="px-6 py-4 text-xs font-semibold tracking-wider text-left uppercase text-slate-600">
+                    ID
+                  </th>
+                  <th className="px-6 py-4 text-xs font-semibold tracking-wider text-left uppercase text-slate-600">
+                    Student
+                  </th>
+                  <th className="px-6 py-4 text-xs font-semibold tracking-wider text-left uppercase text-slate-600">
+                    Amount
+                  </th>
+                  <th className="px-6 py-4 text-xs font-semibold tracking-wider text-left uppercase text-slate-600">
+                    Status
+                  </th>
+                  <th className="px-6 py-4 text-xs font-semibold tracking-wider text-left uppercase text-slate-600">
+                    Issued Date
+                  </th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-100">
                 {filteredInvoices.map((i) => (
                   <tr
                     key={i.id}
-                    className="border-b last:border-none hover:bg-[hsl(var(--muted))]/40 transition-colors"
+                    className="transition-colors duration-200 group hover:bg-slate-50/50"
                   >
-                    <td className="py-2 pr-3">{i.id}</td>
-                    <td className="py-2 pr-3">{studentLabel(i.studentId)}</td>
-                    <td className="py-2 pr-3">
-                      {Number(i.amount).toLocaleString()}
+                    <td className="px-6 py-4">
+                      <code className="px-2 py-1 font-mono text-xs rounded bg-slate-100 text-slate-700">
+                        {i.id.slice(0, 8)}…
+                      </code>
                     </td>
-                    <td className="py-2 pr-3 uppercase">{i.status}</td>
-                    <td className="py-2 pr-3">
-                      {new Date(i.issuedAt).toLocaleString()}
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center justify-center w-8 h-8 text-sm font-semibold text-blue-700 bg-blue-100 rounded-full">
+                          {studentLabel(i.studentId)[0]}
+                        </div>
+                        <span className="font-medium text-slate-900">
+                          {studentLabel(i.studentId)}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="font-bold text-slate-900">
+                        MWK {Number(i.amount).toLocaleString()}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">{getStatusBadge(i.status)}</td>
+                    <td className="px-6 py-4 text-sm text-slate-600">
+                      {new Date(i.issuedAt).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
                     </td>
                   </tr>
                 ))}
+
                 {filteredInvoices.length === 0 && (
                   <tr>
-                    <td
-                      colSpan={5}
-                      className="py-8 text-center text-[hsl(var(--muted-foreground))]"
-                    >
-                      No invoices found.
+                    <td colSpan={5} className="px-6 py-16 text-center">
+                      <div className="flex flex-col items-center gap-4">
+                        <div className="p-4 rounded-full bg-slate-100">
+                          <FileText className="w-8 h-8 text-slate-400" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-slate-700">
+                            No invoices found
+                          </p>
+                          <p className="mt-1 text-sm text-slate-500">
+                            {q
+                              ? "Try adjusting your search"
+                              : "Start by creating an invoice"}
+                          </p>
+                        </div>
+                      </div>
                     </td>
                   </tr>
                 )}
@@ -646,61 +972,122 @@ export default function FeesPage() {
         </CardContent>
       </Card>
 
-      {/* Payments list */}
-      <Card className="border-none shadow-sm bg-white/95 rounded-2xl">
-        <CardHeader>
-          <CardTitle>Payments</CardTitle>
+      {/* Payments Card */}
+      <Card className="overflow-hidden shadow-lg border-slate-200">
+        <CardHeader className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-emerald-50/30">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg shadow bg-gradient-to-br from-emerald-500 to-green-600">
+                <CreditCard className="w-5 h-5 text-white" />
+              </div>
+              <CardTitle className="text-lg font-semibold text-slate-800">
+                Payments
+              </CardTitle>
+            </div>
+            <div className="text-sm text-slate-600">
+              {filteredPayments.length} payment
+              {filteredPayments.length !== 1 ? "s" : ""}
+            </div>
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-left border-b">
-                <tr>
-                  <th className="py-2 pr-3">ID</th>
-                  <th className="py-2 pr-3">Invoice</th>
-                  <th className="py-2 pr-3">Student</th>
-                  <th className="py-2 pr-3">Amount</th>
-                  <th className="py-2 pr-3">Method</th>
-                  <th className="py-2 pr-3">Ref</th>
-                  <th className="py-2 pr-3">Paid At</th>
-                  <th className="py-2 pr-3">Actions</th>
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/50">
+                  <th className="px-6 py-4 text-xs font-semibold tracking-wider text-left uppercase text-slate-600">
+                    ID
+                  </th>
+                  <th className="px-6 py-4 text-xs font-semibold tracking-wider text-left uppercase text-slate-600">
+                    Invoice
+                  </th>
+                  <th className="px-6 py-4 text-xs font-semibold tracking-wider text-left uppercase text-slate-600">
+                    Student
+                  </th>
+                  <th className="px-6 py-4 text-xs font-semibold tracking-wider text-left uppercase text-slate-600">
+                    Amount
+                  </th>
+                  <th className="px-6 py-4 text-xs font-semibold tracking-wider text-left uppercase text-slate-600">
+                    Method
+                  </th>
+                  <th className="px-6 py-4 text-xs font-semibold tracking-wider text-left uppercase text-slate-600">
+                    Paid Date
+                  </th>
+                  <th className="px-6 py-4 text-xs font-semibold tracking-wider text-left uppercase text-slate-600">
+                    Actions
+                  </th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-100">
                 {filteredPayments.map((p) => (
                   <tr
                     key={p.id}
-                    className="border-b last:border-none hover:bg-[hsl(var(--muted))]/40 transition-colors"
+                    className="transition-colors duration-200 group hover:bg-slate-50/50"
                   >
-                    <td className="py-2 pr-3">{p.id}</td>
-                    <td className="py-2 pr-3">{p.invoiceId}</td>
-                    <td className="py-2 pr-3">{studentLabel(p.studentId)}</td>
-                    <td className="py-2 pr-3">
-                      {Number(p.amount).toLocaleString()}
+                    <td className="px-6 py-4">
+                      <code className="px-2 py-1 font-mono text-xs rounded bg-slate-100 text-slate-700">
+                        {p.id.slice(0, 8)}…
+                      </code>
                     </td>
-                    <td className="py-2 pr-3">{p.method || "-"}</td>
-                    <td className="py-2 pr-3">{p.reference || "-"}</td>
-                    <td className="py-2 pr-3">
-                      {new Date(p.paidAt).toLocaleString()}
+                    <td className="px-6 py-4">
+                      <code className="px-2 py-1 font-mono text-xs text-blue-700 rounded bg-blue-50">
+                        {p.invoiceId.slice(0, 8)}…
+                      </code>
                     </td>
-                    <td className="py-2 pr-3">
+                    <td className="px-6 py-4">
+                      <span className="font-medium text-slate-900">
+                        {studentLabel(p.studentId)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="font-bold text-emerald-700">
+                        MWK {Number(p.amount).toLocaleString()}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="px-3 py-1 text-xs font-medium text-indigo-700 capitalize rounded-full bg-indigo-50">
+                        {p.method || "N/A"}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-slate-600">
+                      {new Date(p.paidAt).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </td>
+                    <td className="px-6 py-4">
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => printReceipt(p.id)}
+                        className="flex items-center gap-2 rounded-lg border-slate-300 hover:bg-slate-50"
                       >
-                        Print Receipt
+                        <Receipt className="h-3.5 w-3.5" />
+                        Receipt
                       </Button>
                     </td>
                   </tr>
                 ))}
+
                 {filteredPayments.length === 0 && (
                   <tr>
-                    <td
-                      colSpan={8}
-                      className="py-8 text-center text-[hsl(var(--muted-foreground))]"
-                    >
-                      No payments found.
+                    <td colSpan={7} className="px-6 py-16 text-center">
+                      <div className="flex flex-col items-center gap-4">
+                        <div className="p-4 rounded-full bg-slate-100">
+                          <CreditCard className="w-8 h-8 text-slate-400" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-slate-700">
+                            No payments found
+                          </p>
+                          <p className="mt-1 text-sm text-slate-500">
+                            {q
+                              ? "Try adjusting your search"
+                              : "Record a payment to get started"}
+                          </p>
+                        </div>
+                      </div>
                     </td>
                   </tr>
                 )}

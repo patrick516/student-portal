@@ -2,10 +2,8 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/api/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 
 type LoginResponse = {
   token: string;
@@ -27,56 +25,53 @@ type CanRegisterResponse = {
   allowed: boolean;
 };
 
+// Branding (frontend env – add VITE_BRAND_* in frontend .env later)
+const BRAND_SCHOOL =
+  import.meta.env.VITE_BRAND_SCHOOL || "Patrick Kulinji School";
+const BRAND_NAME = import.meta.env.VITE_BRAND_NAME || "STUDENT PORTAL";
+
 export default function AuthPage() {
   return (
-    <div className="grid min-h-screen lg:grid-cols-2 bg-background">
-      {/* Left panel */}
-      <div className="hidden lg:flex items-center justify-center p-12 bg-[hsl(var(--muted))]">
-        <div className="max-w-md space-y-6">
-          <div className="flex items-center gap-3">
-            <img
-              src="/school.png"
-              alt="School"
-              className="w-10 h-10 rounded-lg shadow"
-            />
-            <h1 className="text-2xl font-bold tracking-tight">
-              Student Portal
-            </h1>
-          </div>
-          <p className="text-[hsl(var(--muted-foreground))] text-sm leading-relaxed">
-            Manage students, classes, attendance, fees and exams with a modern,
-            role-based school management system.
-          </p>
-          <ul className="text-sm text-[hsl(var(--muted-foreground))] list-disc ml-5 space-y-1.5">
-            <li>Head Teacher: manage users, classes and results</li>
-            <li>Teachers: manage subjects, attendance and marks</li>
-            <li>Bursar: manage fees, invoices and debtors</li>
-          </ul>
-        </div>
-      </div>
+    <div className="relative flex items-center justify-center min-h-screen px-4 overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200">
+      {/* Diagonal blue background shape */}
+      <div
+        className="absolute inset-0 bg-[#02B5F7]"
+        style={{
+          clipPath: "polygon(0 0, 45% 0, 35% 100%, 0 100%)",
+        }}
+      />
 
-      {/* Right panel */}
-      <div className="flex items-center justify-center p-6">
-        <Card className="w-full max-w-md border-none shadow-lg rounded-2xl bg-white/95">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <img
-                src="/school.png"
-                alt="School"
-                className="w-8 h-8 rounded-lg"
-              />
-              <div>
-                <CardTitle className="text-xl">Sign in</CardTitle>
-                <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                  Use your school account to access the portal.
+      {/* Main white panel */}
+      <div className="relative z-10 flex flex-col w-full max-w-5xl overflow-hidden bg-white shadow-2xl rounded-3xl md:flex-row">
+        {/* Left: logo + text */}
+        <div className="flex items-center justify-center w-full px-8 py-12 md:w-1/2 md:py-16 bg-gradient-to-br from-white to-gray-50">
+          <div className="flex flex-col items-start gap-6">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center justify-center w-20 h-20 bg-black rounded-lg shadow-lg">
+                <img
+                  src="/school.png"
+                  alt="School Logo"
+                  className="object-contain w-12 h-12"
+                />
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-medium uppercase tracking-[0.2em] text-gray-500">
+                  {BRAND_NAME}
                 </p>
+                <h1 className="text-xl font-bold leading-tight text-gray-800 md:text-2xl">
+                  {BRAND_SCHOOL}
+                </h1>
               </div>
             </div>
-          </CardHeader>
-          <CardContent>
+          </div>
+        </div>
+
+        {/* Right: login form */}
+        <div className="flex items-center justify-center w-full px-8 py-12 bg-white md:w-1/2 md:py-16">
+          <div className="w-full max-w-sm">
             <LoginForm />
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -122,7 +117,8 @@ function LoginForm() {
     }
   };
 
-  const goRegisterHeadteacher = async () => {
+  // Same logic as old "register headteacher", but now phrased as "Login as Admin"
+  const handleRegisterAdmin = async () => {
     setError(null);
     setLoading(true);
     try {
@@ -150,50 +146,58 @@ function LoginForm() {
   };
 
   return (
-    <form onSubmit={onSubmit} className="grid gap-4">
-      <div className="grid gap-1.5">
-        <Label htmlFor="email">Email</Label>
-        <Input
-          id="email"
-          type="email"
-          placeholder="head@school.org"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          disabled={loading}
-        />
-      </div>
-      <div className="grid gap-1.5">
-        <Label htmlFor="password">Password</Label>
-        <Input
-          id="password"
-          type="password"
-          placeholder="Your password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          disabled={loading}
-        />
-      </div>
-
-      {error && (
-        <div className="rounded-md border border-[hsl(var(--destructive))]/40 bg-[hsl(var(--destructive))]/5 px-3 py-2 text-sm text-[hsl(var(--destructive))]">
-          {error}
+    <div className="space-y-6">
+      <form onSubmit={onSubmit} className="space-y-5">
+        <div className="space-y-2">
+          <Input
+            id="email"
+            type="email"
+            placeholder="Enter your Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            disabled={loading}
+            className="h-12 rounded-xl border-2 border-[#02B5F7] focus-visible:ring-[#02B5F7] focus-visible:ring-2 focus-visible:border-[#02B5F7] placeholder:text-gray-400 text-gray-700"
+          />
         </div>
-      )}
 
-      <Button type="submit" disabled={loading} className="w-full">
-        {loading ? "Signing in..." : "Sign in"}
-      </Button>
+        <div className="space-y-2">
+          <Input
+            id="password"
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            disabled={loading}
+            className="h-12 rounded-xl border-2 border-[#02B5F7] focus-visible:ring-[#02B5F7] focus-visible:ring-2 focus-visible:border-[#02B5F7] placeholder:text-gray-400 text-gray-700"
+          />
+        </div>
 
-      <Button
+        {error && (
+          <div className="px-4 py-3 text-sm text-red-700 border border-red-300 rounded-xl bg-red-50">
+            {error}
+          </div>
+        )}
+
+        <Button
+          type="submit"
+          disabled={loading}
+          className="w-full h-12 rounded-xl bg-[#02B5F7] hover:bg-[#029cd4] text-white font-medium text-base shadow-md hover:shadow-lg transition-all duration-200"
+        >
+          {loading ? "Signing in..." : "Login"}
+        </Button>
+      </form>
+
+      {/* Link-style button below, now "Login as Admin ?" */}
+      <button
         type="button"
-        variant="outline"
         disabled={loading}
-        onClick={goRegisterHeadteacher}
+        onClick={handleRegisterAdmin}
+        className="block w-full text-center text-sm font-medium text-[#02B5F7] hover:text-[#029cd4] hover:underline disabled:opacity-60 transition-colors duration-200"
       >
-        I am the Head Teacher (register first account)
-      </Button>
-    </form>
+        Register as Admin ?
+      </button>
+    </div>
   );
 }

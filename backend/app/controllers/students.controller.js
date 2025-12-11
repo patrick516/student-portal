@@ -58,9 +58,20 @@ function isBursar(user) {
 // GET /api/students?search=&classId=
 exports.list = async (req, res) => {
   try {
+    await prisma.student.updateMany({
+      where: {
+        schoolId: req.user.schoolId,
+        status: "suspended",
+        suspensionUntil: { lt: new Date() },
+      },
+      data: { status: "active", suspensionUntil: null },
+    });
+
     const search = (req.query.search || "").trim();
     const classId = (req.query.classId || "").trim();
     const schoolId = req.user.schoolId;
+
+    // auto-clear expired suspensions
 
     // base where
     const where = {
@@ -272,6 +283,16 @@ exports.create = async (req, res) => {
 // GET /api/students/:id
 exports.getOne = async (req, res) => {
   try {
+    await prisma.student.updateMany({
+      where: {
+        id,
+        schoolId,
+        status: "suspended",
+        suspensionUntil: { lt: new Date() },
+      },
+      data: { status: "active", suspensionUntil: null },
+    });
+
     const { id } = req.params;
     const schoolId = req.user.schoolId;
 
@@ -310,6 +331,11 @@ exports.suspend = async (req, res) => {
     const { days, reason } = req.body || {};
     const schoolId = req.user.schoolId;
 
+    const numDays = Number(days);
+    if (!numDays || numDays <= 0) {
+      return res.status(400).json({ error: "days must be > 0" });
+    }
+
     const student = await prisma.student.findFirst({
       where: { id, schoolId },
       include: { currentClass: true },
@@ -333,9 +359,11 @@ exports.suspend = async (req, res) => {
       }
     }
 
+    const until = new Date(Date.now() + numDays * 24 * 60 * 60 * 1000);
+
     const updated = await prisma.student.update({
       where: { id: student.id },
-      data: { status: "suspended" },
+      data: { status: "suspended", suspensionUntil: until },
     });
 
     await logAudit({
@@ -344,10 +372,8 @@ exports.suspend = async (req, res) => {
       action: "student.suspend",
       resource: "student",
       targetId: updated.id,
-      meta: { days, reason },
+      meta: { days: numDays, reason, until: until.toISOString() },
     });
-
-    // Here you would also send guardian notification via mail/SMS service.
 
     res.json({ data: updated });
   } catch (e) {
@@ -443,6 +469,55 @@ exports.remove = async (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     console.error("students.remove error:", e);
+    res.status(500).json({ error: e.message });
+  }
+};
+
+// POST /api/students/:id/unsuspend
+exports.unsuspend = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const schoolId = req.user.schoolId;
+
+    const student = await prisma.student.findFirst({
+      where: { id, schoolId },
+      include: { currentClass: true },
+    });
+    if (!student) return res.status(404).json({ error: "Student not found" });
+
+    // Only admin or form teacher of that class can unsuspend
+    if (!isAdmin(req.user)) {
+      if (!isTeacher(req.user)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      if (!student.currentClassId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const klass = await prisma.class.findFirst({
+        where: { id: student.currentClassId, schoolId },
+        select: { formTeacherId: true },
+      });
+      if (!klass || klass.formTeacherId !== req.user.id) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+    }
+
+    const updated = await prisma.student.update({
+      where: { id: student.id },
+      data: { status: "active", suspensionUntil: null },
+    });
+
+    await logAudit({
+      schoolId,
+      userId: req.user.id,
+      action: "student.unsuspend",
+      resource: "student",
+      targetId: updated.id,
+    });
+
+    res.json({ data: updated });
+  } catch (e) {
+    console.error("students.unsuspend error:", e);
     res.status(500).json({ error: e.message });
   }
 };

@@ -150,6 +150,7 @@ model Student {
   lastName    String
   status      String   @default("active")
   createdAt   DateTime @default(now())
+  suspensionUntil DateTime?  // <— NEW
 
   currentClassId String?
   currentClass   Class?  @relation(fields: [currentClassId], references: [id])
@@ -165,6 +166,7 @@ model Student {
   @@index([schoolId, currentClassId])
   @@index([schoolId, lastName, firstName])
 }
+
 
 model Guardian {
   id        String   @id @default(uuid())
