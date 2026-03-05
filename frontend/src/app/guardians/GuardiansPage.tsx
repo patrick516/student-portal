@@ -19,11 +19,11 @@ import {
   Phone,
   Users,
   Send,
-  Edit,
+  // Edit,
   Trash2,
   Shield,
   UserCheck,
-  ChevronDown,
+  // ChevronDown,
   Loader2,
   AlertCircle,
   BookOpen,
@@ -90,7 +90,7 @@ export default function GuardiansPage() {
       }));
       setStudentOptions(opts);
     },
-    [selectedClassId]
+    [selectedClassId],
   );
 
   useEffect(() => {
@@ -136,7 +136,7 @@ export default function GuardiansPage() {
   const updateGuardian = async (
     g: Guardian,
     field: keyof Guardian,
-    value: string
+    value: string,
   ) => {
     await api.put(`/api/guardians/${g.id}`, {
       [field]: value || null,
@@ -161,20 +161,20 @@ export default function GuardiansPage() {
         {
           classId: selectedClassId,
           studentId: student.id,
-        }
+        },
       );
       const recipients = data.recipients ?? [];
       alert(
         recipients.length
           ? `Results sent to: ${recipients.join(", ")}`
-          : "Results sent (no recipients listed)."
+          : "Results sent (no recipients listed).",
       );
     } catch (error: unknown) {
       const maybeAxiosError = error as {
         response?: { data?: { error?: string } };
       };
       alert(
-        maybeAxiosError.response?.data?.error || "Failed to send results email"
+        maybeAxiosError.response?.data?.error || "Failed to send results email",
       );
     }
   };

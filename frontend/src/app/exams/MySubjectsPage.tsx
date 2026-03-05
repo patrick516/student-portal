@@ -10,18 +10,18 @@ import {
   Hash,
   ChevronRight,
   Users,
-  Filter,
+  // Filter,
   PlusCircle,
   BarChart3,
   Clock,
   Award,
   Search,
   Loader2,
-  AlertCircle,
+  // AlertCircle,
   Calendar,
   FileText,
   Sparkles,
-  Bookmark,
+  // Bookmark,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -49,7 +49,7 @@ export default function MySubjectsPage() {
       setLoading(true);
       try {
         const { data }: { data: { data: Row[] } } = await api.get(
-          "/api/exams/my-subjects"
+          "/api/exams/my-subjects",
         );
         setRows(data.data || []);
       } catch (error) {
@@ -78,7 +78,7 @@ export default function MySubjectsPage() {
           r.className.toLowerCase().includes(query) ||
           r.subjectName.toLowerCase().includes(query) ||
           r.subjectCode?.toLowerCase().includes(query) ||
-          r.termName?.toLowerCase().includes(query)
+          r.termName?.toLowerCase().includes(query),
       );
     }
 
@@ -357,7 +357,7 @@ export default function MySubjectsPage() {
                                     onClick={() => {
                                       setSelectedClassId(subject.classId);
                                       nav(
-                                        `/app/exams/marks?classId=${subject.classId}&subjectId=${subject.subjectId}`
+                                        `/app/exams/marks?classId=${subject.classId}&subjectId=${subject.subjectId}`,
                                       );
                                     }}
                                     className="flex-1 h-10 transition-all rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 group-hover:shadow-lg"
@@ -372,7 +372,7 @@ export default function MySubjectsPage() {
                                     onClick={() => {
                                       setSelectedClassId(subject.classId);
                                       nav(
-                                        `/app/exams/marks?classId=${subject.classId}&subjectId=${subject.subjectId}&view=analytics`
+                                        `/app/exams/marks?classId=${subject.classId}&subjectId=${subject.subjectId}&view=analytics`,
                                       );
                                     }}
                                   >
@@ -385,7 +385,7 @@ export default function MySubjectsPage() {
                         </div>
                       </div>
                     );
-                  }
+                  },
                 )}
               </div>
             )}

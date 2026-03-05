@@ -17,16 +17,16 @@ import {
   Star,
   BarChart3,
   GraduationCap,
-  Calendar,
+  // Calendar,
   User,
-  FileText,
-  ChevronLeft,
+  // FileText,
+  // ChevronLeft,
   Loader2,
   AlertCircle,
-  Shield,
+  // Shield,
   Sparkles,
   Medal,
-  Percent,
+  // Percent,
   Target,
   Crown,
 } from "lucide-react";
@@ -112,13 +112,13 @@ export default function ReportCardPage() {
 
   const row = useMemo(
     () => results.find((r) => r.studentId === studentId),
-    [results, studentId]
+    [results, studentId],
   );
 
   const rank = useMemo(() => {
     if (!row) return null;
     const sortedResults = [...results].sort(
-      (a, b) => b.totalPoints - a.totalPoints
+      (a, b) => b.totalPoints - a.totalPoints,
     );
     const idx = sortedResults.findIndex((r) => r.studentId === row.studentId);
     return idx >= 0 ? idx + 1 : null;
@@ -184,7 +184,7 @@ export default function ReportCardPage() {
             <td>${s.total}</td>
             <td>${s.grade}</td>
             <td>${s.points}</td>
-          </tr>`
+          </tr>`,
       )
       .join("");
 
@@ -196,7 +196,7 @@ export default function ReportCardPage() {
             <td>${s.total}</td>
             <td>${s.grade}</td>
             <td>${s.points}</td>
-          </tr>`
+          </tr>`,
       )
       .join("");
 
@@ -626,7 +626,7 @@ export default function ReportCardPage() {
                           <td className="px-6 py-4">
                             <span
                               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-gradient-to-r ${getGradeColor(
-                                subject.grade
+                                subject.grade,
                               )} text-white`}
                             >
                               <Star className="w-3 h-3" />
@@ -723,7 +723,7 @@ export default function ReportCardPage() {
                           <td className="px-6 py-4">
                             <span
                               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-gradient-to-r ${getGradeColor(
-                                subject.grade
+                                subject.grade,
                               )} text-white`}
                             >
                               <Award className="w-3 h-3" />

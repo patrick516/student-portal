@@ -13,10 +13,8 @@ import {
   Percent,
   Hash,
   Type,
-  CheckCircle,
   XCircle,
   Edit,
-  Eye,
   Download,
   Upload,
   Sparkles,
@@ -27,8 +25,8 @@ import {
   Calculator,
   BookOpen,
   Star,
-  Users,
-  Calendar,
+  // Users,
+  // Calendar,
   FileText,
 } from "lucide-react";
 
@@ -73,7 +71,7 @@ export default function GradeSchemePage() {
         ) {
           // Sort bands by min score (lowest to highest)
           const sortedBands = [...data.bands].sort(
-            (a: Band, b: Band) => a.min - b.min
+            (a: Band, b: Band) => a.min - b.min,
           );
           setBands(sortedBands);
           setCurrentScheme({
@@ -127,7 +125,7 @@ export default function GradeSchemePage() {
         alert(
           `Band ${i + 1}: Minimum (${
             band.min
-          }) cannot be greater than Maximum (${band.max})`
+          }) cannot be greater than Maximum (${band.max})`,
         );
         return;
       }
@@ -141,7 +139,7 @@ export default function GradeSchemePage() {
       } else {
         if (band.min !== prevMax + 1) {
           alert(
-            `Gap detected: Range ${prevMax + 1}-${band.min - 1}% is not covered`
+            `Gap detected: Range ${prevMax + 1}-${band.min - 1}% is not covered`,
           );
           return;
         }
@@ -333,7 +331,7 @@ export default function GradeSchemePage() {
                       <div className="text-sm font-normal text-slate-500">
                         Last updated:{" "}
                         {new Date(
-                          currentScheme.createdAt || ""
+                          currentScheme.createdAt || "",
                         ).toLocaleDateString("en-US", {
                           year: "numeric",
                           month: "long",
@@ -358,23 +356,22 @@ export default function GradeSchemePage() {
                   <Download className="w-4 h-4" />
                   Export
                 </Button>
-                <label className="cursor-pointer">
+                <label className="cursor-pointer flex items-center gap-2">
                   <Button
                     variant="outline"
-                    as="span"
                     disabled={!selectedClassId}
                     className="flex items-center gap-2 px-4 font-semibold text-purple-700 border-purple-200 h-11 hover:bg-purple-50 rounded-xl disabled:opacity-50"
                   >
                     <Upload className="w-4 h-4" />
                     Import
-                    <input
-                      type="file"
-                      accept=".json"
-                      onChange={importScheme}
-                      className="hidden"
-                      disabled={!selectedClassId}
-                    />
                   </Button>
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={importScheme}
+                    className="hidden"
+                    disabled={!selectedClassId}
+                  />
                 </label>
                 <Button
                   onClick={() => {
@@ -552,11 +549,11 @@ export default function GradeSchemePage() {
                               const gradeInfo = getGradeForScore(score);
                               if (gradeInfo) {
                                 alert(
-                                  `Score: ${score}%\nGrade: ${gradeInfo.grade}\nPoints: ${gradeInfo.points}`
+                                  `Score: ${score}%\nGrade: ${gradeInfo.grade}\nPoints: ${gradeInfo.points}`,
                                 );
                               } else {
                                 alert(
-                                  `Score ${score}% is not within any defined grade band`
+                                  `Score ${score}% is not within any defined grade band`,
                                 );
                               }
                             } else {
@@ -573,7 +570,7 @@ export default function GradeSchemePage() {
                       className="text-purple-700 border-purple-200 h-11 hover:bg-purple-50 rounded-xl"
                       onClick={() => {
                         const scoreInput = document.querySelector(
-                          'input[type="number"]'
+                          'input[type="number"]',
                         ) as HTMLInputElement;
                         if (scoreInput) {
                           const score = parseInt(scoreInput.value);
@@ -581,11 +578,11 @@ export default function GradeSchemePage() {
                             const gradeInfo = getGradeForScore(score);
                             if (gradeInfo) {
                               alert(
-                                `Score: ${score}%\nGrade: ${gradeInfo.grade}\nPoints: ${gradeInfo.points}`
+                                `Score: ${score}%\nGrade: ${gradeInfo.grade}\nPoints: ${gradeInfo.points}`,
                               );
                             } else {
                               alert(
-                                `Score ${score}% is not within any defined grade band`
+                                `Score ${score}% is not within any defined grade band`,
                               );
                             }
                           } else {
@@ -788,8 +785,10 @@ export default function GradeSchemePage() {
                                   ) {
                                     setBands((prev) =>
                                       prev.map((x, idx) =>
-                                        idx === index ? { ...x, min: value } : x
-                                      )
+                                        idx === index
+                                          ? { ...x, min: value }
+                                          : x,
+                                      ),
                                     );
                                   }
                                 }}
@@ -818,8 +817,10 @@ export default function GradeSchemePage() {
                                   ) {
                                     setBands((prev) =>
                                       prev.map((x, idx) =>
-                                        idx === index ? { ...x, max: value } : x
-                                      )
+                                        idx === index
+                                          ? { ...x, max: value }
+                                          : x,
+                                      ),
                                     );
                                   }
                                 }}
@@ -849,8 +850,8 @@ export default function GradeSchemePage() {
                                   prev.map((x, idx) =>
                                     idx === index
                                       ? { ...x, grade: e.target.value }
-                                      : x
-                                  )
+                                      : x,
+                                  ),
                                 )
                               }
                               className="text-sm rounded-lg h-9 border-slate-200 pl-9"
@@ -882,8 +883,8 @@ export default function GradeSchemePage() {
                                     prev.map((x, idx) =>
                                       idx === index
                                         ? { ...x, points: value }
-                                        : x
-                                    )
+                                        : x,
+                                    ),
                                   );
                                 }
                               }}

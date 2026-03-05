@@ -10,27 +10,27 @@ import {
   XCircle,
   Download,
   Printer,
-  User,
+  // User,
   Award,
   BarChart3,
   FileText,
   Hash,
   Search,
   Filter,
-  ChevronRight,
+  // ChevronRight,
   Eye,
   Trophy,
   Shield,
-  Sparkles,
+  // Sparkles,
   Loader2,
   AlertCircle,
   GraduationCap,
-  Percent,
-  Star,
-  BookOpen,
+  // Percent,
+  // Star,
+  // BookOpen,
   Target,
   Users,
-  Calendar,
+  // Calendar,
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
@@ -72,7 +72,7 @@ export default function ResultsPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"points" | "marks" | "name" | "code">(
-    "points"
+    "points",
   );
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
@@ -112,7 +112,7 @@ export default function ResultsPage() {
       // 2) Try to fetch computed results and overlay
       try {
         const res = await api.get(
-          `/api/exams/results/class/${selectedClassId}`
+          `/api/exams/results/class/${selectedClassId}`,
         );
         const resultData: ResultRow[] = (res.data?.data || []) as ResultRow[];
 
@@ -120,7 +120,7 @@ export default function ResultsPage() {
         resultData.forEach((r) => byId.set(r.studentId, r));
 
         baseRows = baseRows.map((r) =>
-          byId.has(r.studentId) ? byId.get(r.studentId)! : r
+          byId.has(r.studentId) ? byId.get(r.studentId)! : r,
         );
       } catch (err: any) {
         const msg =
@@ -151,7 +151,7 @@ export default function ResultsPage() {
       filtered = filtered.filter(
         (r) =>
           r.name.toLowerCase().includes(query) ||
-          r.studentCode.toLowerCase().includes(query)
+          r.studentCode.toLowerCase().includes(query),
       );
     }
 
@@ -196,7 +196,7 @@ export default function ResultsPage() {
       rows.length
         ? Math.round((100 * rows.filter((r) => r.passed).length) / rows.length)
         : 0,
-    [rows]
+    [rows],
   );
 
   const averagePoints = useMemo(
@@ -206,10 +206,10 @@ export default function ResultsPage() {
             rows
               .filter((r) => r.subjects.length > 0)
               .reduce((sum, r) => sum + r.totalPoints, 0) /
-              rows.filter((r) => r.subjects.length > 0).length
+              rows.filter((r) => r.subjects.length > 0).length,
           )
         : 0,
-    [rows]
+    [rows],
   );
 
   const exportCSV = () => {
@@ -255,7 +255,7 @@ export default function ResultsPage() {
         <td class="${r.passed ? "passed" : "failed"}">${
           r.passed ? "✓ Yes" : "✗ No"
         }</td>
-      </tr>`
+      </tr>`,
       )
       .join("");
 
@@ -338,7 +338,7 @@ export default function ResultsPage() {
 
   const openProfile = (id: string) => {
     window.location.href = `/app/student-profile?studentId=${encodeURIComponent(
-      id
+      id,
     )}`;
   };
 
@@ -346,9 +346,9 @@ export default function ResultsPage() {
     if (!selectedClassId) return;
     window.open(
       `/app/exams/report-card?classId=${selectedClassId}&studentId=${encodeURIComponent(
-        id
+        id,
       )}`,
-      "_blank"
+      "_blank",
     );
   };
 
@@ -603,8 +603,8 @@ export default function ResultsPage() {
                     {loading
                       ? "Fetching student data and performance results..."
                       : selectedClassId
-                      ? "No students or results available for this class."
-                      : "Please select a class to view results."}
+                        ? "No students or results available for this class."
+                        : "Please select a class to view results."}
                   </p>
                 </div>
               </div>
@@ -685,7 +685,7 @@ export default function ResultsPage() {
                                   <span
                                     key={subject.subjectId}
                                     className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getGradeColor(
-                                      subject.grade
+                                      subject.grade,
                                     )}`}
                                   >
                                     <Award className="w-2.5 h-2.5" />

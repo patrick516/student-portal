@@ -176,25 +176,24 @@ const StatusBadge = ({ status }: { status: string }) => {
 };
 
 // Define AppState interface to avoid 'any'
+type AppUser = {
+  id: string;
+  role: string;
+  [key: string]: any;
+};
+
+// App state
 interface AppState {
   classes?: Klass[];
   selectedClassId?: string;
-  me?: {
-    id: string;
-    role: string;
-    [key: string]: any;
-  };
-  user?: {
-    id: string;
-    role: string;
-    [key: string]: any;
-  };
+  me?: AppUser;
+  user?: AppUser;
 }
 
 export default function StudentsPage() {
   const app = useApp() as AppState;
   const classes: Klass[] = app.classes || [];
-  const me = app.me || app.user || {};
+  const me: AppUser | undefined = app.me || app.user;
   const selectedClassId: string | undefined = app.selectedClassId;
 
   const role: string | undefined = me?.role;
@@ -202,7 +201,7 @@ export default function StudentsPage() {
   const isTeacher = role === "teacher";
 
   const myFormClassIds: string[] = classes
-    .filter((c) => c.formTeacher && c.formTeacher.id === me.id)
+    .filter((c) => c.formTeacher?.id === me?.id)
     .map((c) => c.id);
 
   const isFormTeacherGlobal = isTeacher && myFormClassIds.length > 0;
@@ -270,7 +269,7 @@ export default function StudentsPage() {
   const filtered = useMemo(() => {
     if (statusFilter === "all") return rows;
     return rows.filter(
-      (row) => row.status.toLowerCase() === statusFilter.toLowerCase()
+      (row) => row.status.toLowerCase() === statusFilter.toLowerCase(),
     );
   }, [rows, statusFilter]);
 
@@ -355,7 +354,7 @@ export default function StudentsPage() {
 
       if (mapped.class?.id) {
         const rRes = await api.get(
-          `/api/exams/results/class/${mapped.class.id}`
+          `/api/exams/results/class/${mapped.class.id}`,
         );
         const rows: ResultRow[] = rRes.data.data || [];
         const row = rows.find((r) => r.studentId === id);

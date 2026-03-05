@@ -16,11 +16,11 @@ import {
   Users,
   AlertCircle,
   Loader2,
-  ChevronDown,
+  // ChevronDown,
   CheckCircle,
   XCircle, // Add this import
-  Plus,
-  Minus,
+  // Plus,
+  // Minus,
 } from "lucide-react";
 
 type Row = {
@@ -120,7 +120,7 @@ export default function DebtorsPage() {
       });
       setStudOpts(opts);
     },
-    [selectedClassId]
+    [selectedClassId],
   );
 
   useEffect(() => {
@@ -184,7 +184,7 @@ export default function DebtorsPage() {
 
         const { data } = await api.get<DebtorsResponse>(
           "/api/reports/debtors",
-          { params }
+          { params },
         );
         const reportRows: Row[] = data?.data || [];
         const byStudentId = new Map<string, Row>();
@@ -202,7 +202,7 @@ export default function DebtorsPage() {
                 className:
                   byStudentId.get(r.studentId)!.className ?? r.className,
               }
-            : r
+            : r,
         );
 
         setRows(baseRows);
@@ -210,7 +210,7 @@ export default function DebtorsPage() {
         setLoading(false);
       }
     },
-    [asOf, selectedClassId, termId]
+    [asOf, selectedClassId, termId],
   );
 
   useEffect(() => {
@@ -230,7 +230,7 @@ export default function DebtorsPage() {
     return list.filter((r) =>
       (r.studentCode + r.firstName + r.lastName + (r.className || ""))
         .toLowerCase()
-        .includes(s)
+        .includes(s),
     );
   }, [rows, q, student]);
 
@@ -312,7 +312,7 @@ export default function DebtorsPage() {
             ? new Date(r.latestInvoice).toISOString().slice(0, 10)
             : ""
         }</td>
-      </tr>`
+      </tr>`,
       )
       .join("");
     w.document.write(`
@@ -729,8 +729,8 @@ export default function DebtorsPage() {
                             r.balance > 0
                               ? "bg-red-100 text-red-700"
                               : r.balance < 0
-                              ? "bg-blue-100 text-blue-700"
-                              : "bg-emerald-100 text-emerald-700"
+                                ? "bg-blue-100 text-blue-700"
+                                : "bg-emerald-100 text-emerald-700"
                           }`}
                         >
                           {formatCurrency(r.balance)}
@@ -746,7 +746,7 @@ export default function DebtorsPage() {
                                   month: "short",
                                   day: "numeric",
                                   year: "numeric",
-                                }
+                                },
                               )}
                             </span>
                           </div>
@@ -804,8 +804,8 @@ export default function DebtorsPage() {
                           totals.bal > 0
                             ? "text-red-700"
                             : totals.bal < 0
-                            ? "text-blue-700"
-                            : "text-emerald-700"
+                              ? "text-blue-700"
+                              : "text-emerald-700"
                         }`}
                       >
                         {formatCurrency(totals.bal)}
