@@ -2,8 +2,16 @@
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
-console.log("ENV DATABASE_URL:", process.env.DATABASE_URL);
 
+// -------------------
+// DEBUG: environment variables
+// -------------------
+console.log("ENV DATABASE_URL:", process.env.DATABASE_URL);
+console.log("ENV PORT:", process.env.PORT);
+
+// -------------------
+// Routes
+// -------------------
 const authRoutes = require("./app/routes/auth.route");
 const studentsRoutes = require("./app/routes/students.route");
 const classesRoutes = require("./app/routes/classes.route");
@@ -21,18 +29,21 @@ const feeSettingsRoutes = require("./app/routes/feeSettings.route");
 
 const app = express();
 
+// -------------------
 // CORS configuration
+// -------------------
 const allowedOrigins = [
-  "https://student-portal-ecru.vercel.app",
-  "http://localhost:5173",
+  "https://student-portal-ecru.vercel.app", // Vercel frontend
+  "http://localhost:5173", // local dev
 ];
+
 app.use(
   cors({
     origin: function (origin, callback) {
-      // allow requests with no origin (like mobile apps or curl)
-      if (!origin) return callback(null, true);
+      if (!origin) return callback(null, true); // mobile apps, curl, etc.
       if (allowedOrigins.indexOf(origin) === -1) {
-        const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}`;
+        const msg = `CORS error: Origin ${origin} not allowed`;
+        console.warn(msg);
         return callback(new Error(msg), false);
       }
       return callback(null, true);
@@ -41,12 +52,19 @@ app.use(
   }),
 );
 
+// -------------------
+// Body parser
+// -------------------
 app.use(express.json());
 
+// -------------------
 // Health check
+// -------------------
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
-// real routes
+// -------------------
+// Attach routes
+// -------------------
 app.use("/api/auth", authRoutes);
 app.use("/api/students", studentsRoutes);
 app.use("/api/classes", classesRoutes);
@@ -62,5 +80,19 @@ app.use("/api/guardians", guardiansRoutes);
 app.use("/api/terms", termsRoutes);
 app.use("/api/fee-settings", feeSettingsRoutes);
 
+// -------------------
+// Error handler
+// -------------------
+app.use((err, _req, res, _next) => {
+  console.error("Express error:", err.message);
+  res.status(500).json({ error: err.message });
+});
+
+// -------------------
+// Start server
+// -------------------
 const port = process.env.PORT || 3001;
-app.listen(port, () => console.log(`API running on http://localhost:${port}`));
+app.listen(port, "0.0.0.0", () => {
+  console.log(`API running on port ${port}`);
+  console.log(`Health check: http://localhost:${port}/health`);
+});
