@@ -2,6 +2,7 @@
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
+console.log("ENV DATABASE_URL:", process.env.DATABASE_URL);
 
 const authRoutes = require("./app/routes/auth.route");
 const studentsRoutes = require("./app/routes/students.route");
@@ -21,7 +22,10 @@ const feeSettingsRoutes = require("./app/routes/feeSettings.route");
 const app = express();
 
 // CORS configuration
-const allowedOrigins = ["https://student-portal-ecru.vercel.app"];
+const allowedOrigins = [
+  "https://student-portal-ecru.vercel.app",
+  "http://localhost:5173",
+];
 app.use(
   cors({
     origin: function (origin, callback) {
