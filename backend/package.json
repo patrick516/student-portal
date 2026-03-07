@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon index.js",
+    "dev": "NODE_OPTIONS=--dns-result-order=ipv4first nodemon index.js",
     "start": "node index.js"
   },
   "keywords": [],
@@ -22,6 +22,7 @@
     "pg": "^8.16.3",
     "prisma": "^6.19.0",
     "resend": "^6.4.2",
+    "sib-api-v3-sdk": "^8.5.0",
     "zod": "^4.1.12"
   },
   "devDependencies": {

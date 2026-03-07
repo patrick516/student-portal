@@ -3,6 +3,7 @@ const { sendMailSMTP } = require("./mailer.smtp");
 const { sendMailResend } = require("./mailer.resend");
 
 const MAIL_PROVIDER = (process.env.MAIL_PROVIDER || "smtp").toLowerCase();
+const { sendMailBrevo } = require("./mailer.brevo");
 
 const BRAND_NAME = process.env.BRAND_NAME || "Student Portal";
 const BRAND_SCHOOL = process.env.BRAND_SCHOOL || "Demo School";
@@ -41,13 +42,18 @@ function wrapHtml({ title, bodyHtml }) {
 }
 
 function sendMail({ to, subject, html, text }) {
+  console.log("[MAIL PROVIDER]", MAIL_PROVIDER);
+
+  if (MAIL_PROVIDER === "brevo") {
+    return sendMailBrevo({ to, subject, html, text });
+  }
+
   if (MAIL_PROVIDER === "resend") {
     return sendMailResend({ to, subject, html, text });
   }
-  // default to SMTP
+
   return sendMailSMTP({ to, subject, html, text });
 }
-
 // ---------- helpers for controllers ----------
 
 function invitePayload(to, tempPassword) {
@@ -128,7 +134,7 @@ async function sendExamResultsEmail({
         (s) =>
           `<tr><td>${s.subjectName || ""}</td><td>${s.total}</td><td>${
             s.grade
-          }</td><td>${s.points}</td></tr>`
+          }</td><td>${s.points}</td></tr>`,
       )
       .join("") ||
     `<tr><td colspan="4" style="border:1px solid #e5e7eb;padding:6px 8px;font-size:12px">No subject breakdown available.</td></tr>`;
@@ -137,8 +143,8 @@ async function sendExamResultsEmail({
     <p>Dear Parent/Guardian,</p>
     <p>Here is the exam summary for <b>${studentName}</b> in <b>${className}</b> at ${BRAND_SCHOOL}.</p>
     <p><b>Total Points:</b> ${totalPoints} &nbsp; • &nbsp; <b>Total Marks:</b> ${totalMarks} &nbsp; • &nbsp; <b>Result:</b> ${
-    passed ? "Pass" : "Fail"
-  }</p>
+      passed ? "Pass" : "Fail"
+    }</p>
     <table style="border-collapse:collapse;width:100%;margin-top:12px">
       <thead>
         <tr>
