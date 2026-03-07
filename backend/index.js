@@ -19,9 +19,27 @@ const termsRoutes = require("./app/routes/terms.route");
 const feeSettingsRoutes = require("./app/routes/feeSettings.route");
 
 const app = express();
-app.use(cors());
+
+// CORS configuration
+const allowedOrigins = ["https://student-portal-ecru.vercel.app"];
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // allow requests with no origin (like mobile apps or curl)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.indexOf(origin) === -1) {
+        const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}`;
+        return callback(new Error(msg), false);
+      }
+      return callback(null, true);
+    },
+    credentials: true, // allow cookies/auth headers
+  }),
+);
+
 app.use(express.json());
 
+// Health check
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
 // real routes
