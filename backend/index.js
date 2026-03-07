@@ -9,24 +9,6 @@ require("dotenv").config();
 console.log("ENV DATABASE_URL:", process.env.DATABASE_URL);
 console.log("ENV PORT:", process.env.PORT);
 
-// -------------------
-// Routes
-// -------------------
-const authRoutes = require("./app/routes/auth.route");
-const studentsRoutes = require("./app/routes/students.route");
-const classesRoutes = require("./app/routes/classes.route");
-const auditRoutes = require("./app/routes/audit.route");
-const setupRoutes = require("./app/routes/setup.route");
-const usersRoutes = require("./app/routes/users.route");
-const subjectsRoutes = require("./app/routes/subjects.route");
-const attendanceRoutes = require("./app/routes/attendance.route");
-const feesRoutes = require("./app/routes/fees.route");
-const reportsRoutes = require("./app/routes/reports.route");
-const examsRoutes = require("./app/routes/exams.route");
-const guardiansRoutes = require("./app/routes/guardians.route");
-const termsRoutes = require("./app/routes/terms.route");
-const feeSettingsRoutes = require("./app/routes/feeSettings.route");
-
 const app = express();
 
 // -------------------
@@ -65,6 +47,21 @@ app.get("/health", (_req, res) => res.json({ ok: true }));
 // -------------------
 // Attach routes
 // -------------------
+const authRoutes = require("./app/routes/auth.route");
+const studentsRoutes = require("./app/routes/students.route");
+const classesRoutes = require("./app/routes/classes.route");
+const auditRoutes = require("./app/routes/audit.route");
+const setupRoutes = require("./app/routes/setup.route");
+const usersRoutes = require("./app/routes/users.route");
+const subjectsRoutes = require("./app/routes/subjects.route");
+const attendanceRoutes = require("./app/routes/attendance.route");
+const feesRoutes = require("./app/routes/fees.route");
+const reportsRoutes = require("./app/routes/reports.route");
+const examsRoutes = require("./app/routes/exams.route");
+const guardiansRoutes = require("./app/routes/guardians.route");
+const termsRoutes = require("./app/routes/terms.route");
+const feeSettingsRoutes = require("./app/routes/feeSettings.route");
+
 app.use("/api/auth", authRoutes);
 app.use("/api/students", studentsRoutes);
 app.use("/api/classes", classesRoutes);
@@ -94,5 +91,5 @@ app.use((err, _req, res, _next) => {
 const port = process.env.PORT || 3001;
 app.listen(port, "0.0.0.0", () => {
   console.log(`API running on port ${port}`);
-  console.log(`Health check: http://localhost:${port}/health`);
+  console.log(`Health check available at /health`);
 });
