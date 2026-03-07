@@ -11,9 +11,13 @@ const SECRET = process.env.JWT_SECRET || "dev_secret";
 // ---------------------------------------------
 exports.canRegisterFirst = async (req, res) => {
   try {
+    console.log("DATABASE_URL:", process.env.DATABASE_URL);
     console.log("canRegisterFirst: handler invoked"); // DEBUG
     const count = await prisma.user.count();
+    console.log("User count (Prisma sees):", count);
     console.log("canRegisterFirst: user count =", count); // DEBUG
+    const users = await prisma.user.findMany();
+    console.log("All users Prisma sees:", users);
     return res.json({ allowed: count === 0 });
   } catch (e) {
     console.error("canRegisterFirst error:", e);
