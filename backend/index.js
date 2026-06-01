@@ -61,6 +61,8 @@ const examsRoutes = require("./app/routes/exams.route");
 const guardiansRoutes = require("./app/routes/guardians.route");
 const termsRoutes = require("./app/routes/terms.route");
 const feeSettingsRoutes = require("./app/routes/feeSettings.route");
+const settingsRoutes = require("./app/routes/settings.route");
+const feeComponentsRoutes = require("./app/routes/feeComponents.route");
 
 app.use("/api/auth", authRoutes);
 app.use("/api/students", studentsRoutes);
@@ -76,6 +78,8 @@ app.use("/api/exams", examsRoutes);
 app.use("/api/guardians", guardiansRoutes);
 app.use("/api/terms", termsRoutes);
 app.use("/api/fee-settings", feeSettingsRoutes);
+app.use("/api/settings", settingsRoutes);
+app.use("/api/fee-components", feeComponentsRoutes);
 
 // -------------------
 // Error handler

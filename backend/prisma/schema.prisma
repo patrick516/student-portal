@@ -11,6 +11,11 @@ datasource db {
 model School {
   id           String        @id @default(uuid())
   name         String
+  address      String?
+  phone        String?
+  email        String?
+  motto        String?
+  logoUrl      String?
   createdAt    DateTime      @default(now())
   users        User[]
   classes      Class[]
@@ -26,7 +31,9 @@ model School {
   terms        Term[]
   feeSettings  FeeSetting[]
 
-  auditLogs AuditLog[]
+  auditLogs      AuditLog[]
+  studentCredits StudentCredit[]
+  feeComponents  FeeComponent[]
 }
 
 model AuditLog {
@@ -49,11 +56,12 @@ model AuditLog {
 model Term {
   id        String   @id @default(uuid())
   schoolId  String
-  name      String // e.g. "Term 1", "Term 2"
-  year      Int // e.g. 2025
+  name      String
+  year      Int
   startDate DateTime
   endDate   DateTime
   isActive  Boolean  @default(false)
+  status    String   @default("upcoming") // upcoming | active | ended
 
   school School @relation(fields: [schoolId], references: [id])
 
@@ -100,6 +108,25 @@ model FeeSetting {
   @@index([schoolId, termId, classId])
 }
 
+// ---------- Fee Components ----------
+model FeeComponent {
+  id        String   @id @default(uuid())
+  schoolId  String
+  termId    String
+  name      String // e.g. "Tuition Fee", "Uniform", "Exam Fee"
+  amount    Decimal  @db.Decimal(12, 2)
+  optional  Boolean  @default(false)
+  scope     String   @default("school") // "school" | "class"
+  classId   String? // null = applies to all classes
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id])
+
+  @@index([schoolId, termId])
+  @@index([schoolId, termId, classId])
+}
+
 // ---------- Users ----------
 model User {
   id                 String   @id @default(uuid())
@@ -143,30 +170,30 @@ model Subject {
 
 // ---------- Students ----------
 model Student {
-  id          String   @id @default(uuid())
-  schoolId    String
-  studentCode String
-  firstName   String
-  lastName    String
-  status      String   @default("active")
-  createdAt   DateTime @default(now())
-  suspensionUntil DateTime?  // <— NEW
+  id              String    @id @default(uuid())
+  schoolId        String
+  studentCode     String
+  firstName       String
+  lastName        String
+  status          String    @default("active")
+  createdAt       DateTime  @default(now())
+  suspensionUntil DateTime? // <— NEW
 
   currentClassId String?
   currentClass   Class?  @relation(fields: [currentClassId], references: [id])
   school         School  @relation(fields: [schoolId], references: [id])
 
-  invoices   Invoice[]
-  payments   Payment[]
-  attendance Attendance[]
-  marks      Mark[]
-  guardians  Guardian[]
+  invoices       Invoice[]
+  payments       Payment[]
+  attendance     Attendance[]
+  marks          Mark[]
+  guardians      Guardian[]
+  studentCredits StudentCredit[]
 
   @@unique([schoolId, studentCode])
   @@index([schoolId, currentClassId])
   @@index([schoolId, lastName, firstName])
 }
-
 
 model Guardian {
   id        String   @id @default(uuid())
@@ -237,13 +264,15 @@ model Attendance {
 
 // ---------- Fees ----------
 model Invoice {
-  id        String   @id @default(uuid())
-  schoolId  String
-  studentId String
-  termId    String? // stores Term.id
-  amount    Decimal  @db.Decimal(12, 2)
-  status    String   @default("unpaid") // 'unpaid' | 'partial' | 'paid'
-  issuedAt  DateTime @default(now())
+  id             String   @id @default(uuid())
+  schoolId       String
+  studentId      String
+  termId         String?
+  amount         Decimal  @db.Decimal(12, 2) // auto-calculated from components
+  overrideAmount Decimal? @db.Decimal(12, 2) // manual override by bursar/admin
+  overrideReason String? // reason for override
+  status         String   @default("unpaid")
+  issuedAt       DateTime @default(now())
 
   school   School    @relation(fields: [schoolId], references: [id])
   student  Student   @relation(fields: [studentId], references: [id])
@@ -262,6 +291,8 @@ model Payment {
   amount     Decimal  @db.Decimal(12, 2)
   method     String?
   reference  String?
+  note       String?
+  type       String   @default("payment")
   paidAt     DateTime @default(now())
   recordedBy String?
 
@@ -271,6 +302,26 @@ model Payment {
 
   @@index([schoolId, studentId])
   @@index([invoiceId])
+}
+
+// ---------- Student Credit ----------
+model StudentCredit {
+  id            String   @id @default(uuid())
+  schoolId      String
+  studentId     String
+  amount        Decimal  @db.Decimal(12, 2)
+  source        String // overpayment | manual
+  termId        String? // term where overpayment occurred
+  appliedTermId String? // term where credit was applied
+  status        String   @default("available") // available | applied | partial
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  school  School  @relation(fields: [schoolId], references: [id])
+  student Student @relation(fields: [studentId], references: [id])
+
+  @@index([schoolId, studentId])
+  @@index([schoolId, status])
 }
 
 // ---------- Exams / Scores ----------

@@ -171,6 +171,37 @@ Result: ${passed ? "Pass" : "Fail"}`;
   });
 }
 
+// Payment receipt to guardian
+async function sendPaymentReceiptEmail({
+  to,
+  studentName,
+  amount,
+  invoiceId,
+  schoolName,
+}) {
+  const title = `Payment Receipt — ${studentName}`;
+  const bodyHtml = `
+    <p>Dear Parent/Guardian,</p>
+    <p>A payment of <b>MWK ${Number(amount).toLocaleString()}</b> has been
+    recorded for <b>${studentName}</b> at ${schoolName || BRAND_SCHOOL}.</p>
+    <p style="padding:12px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px">
+      <b>Amount Paid:</b> MWK ${Number(amount).toLocaleString()}<br/>
+      <b>Invoice Ref:</b> ${invoiceId?.slice(0, 8) || "N/A"}<br/>
+      <b>School:</b> ${schoolName || BRAND_SCHOOL}
+    </p>
+    <p>Thank you for your payment. Please keep this as your receipt.</p>`;
+
+  const html = wrapHtml({ title, bodyHtml });
+  const text = `Payment of MWK ${Number(amount).toLocaleString()} received for ${studentName} at ${schoolName}.`;
+
+  return sendMail({
+    to,
+    subject: `Payment Receipt — ${studentName}`,
+    html,
+    text,
+  });
+}
+
 module.exports = {
   // low-level
   sendMail,
@@ -179,4 +210,5 @@ module.exports = {
   invitePayload,
   sendFormTeacherNotification,
   sendExamResultsEmail,
+  sendPaymentReceiptEmail,
 };

@@ -5,13 +5,13 @@ import { api } from "@/api/client";
 import { useApp } from "@/app/state/useApp";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { 
-  User, 
-  Users, 
-  Calendar, 
-  DollarSign, 
-  GraduationCap, 
-  ArrowLeft, 
+import {
+  User,
+  Users,
+  Calendar,
+  DollarSign,
+  GraduationCap,
+  ArrowLeft,
   Printer,
   CheckCircle,
   XCircle,
@@ -21,7 +21,7 @@ import {
   UserCircle,
   Award,
   TrendingUp,
-  AlertCircle
+  AlertCircle,
 } from "lucide-react";
 
 type Student = {
@@ -94,10 +94,11 @@ export default function StudentProfilePage() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [result, setResult] = useState<ResultRow | null>(null);
   const [loading, setLoading] = useState(true);
+  const [creditBalance, setCreditBalance] = useState<number>(0);
 
   const classId = useMemo(
     () => student?.currentClass?.id || selectedClassId || "",
-    [student, selectedClassId]
+    [student, selectedClassId],
   );
 
   useEffect(() => {
@@ -121,14 +122,15 @@ export default function StudentProfilePage() {
         });
         setAtt(aRes.data.data || null);
 
-        // 4) Fees
-        const [invRes, payRes] = await Promise.all([
+        // 4) Fees + Credit
+        const [invRes, payRes, creditRes] = await Promise.all([
           api.get("/api/fees/invoices", { params: { studentId } }),
           api.get("/api/fees/payments", { params: { studentId } }),
+          api.get("/api/fees/credits", { params: { studentId } }),
         ]);
         setInvoices(invRes.data.data || []);
         setPayments(payRes.data.data || []);
-
+        setCreditBalance(Number(creditRes.data?.totalCredit || 0));
         // 5) Latest results for this class
         const cid = s.currentClass?.id || selectedClassId;
         if (cid) {
@@ -152,13 +154,13 @@ export default function StudentProfilePage() {
       invoices
         .filter((i) => i.status !== "paid")
         .reduce((sum, i) => sum + Number(i.amount || 0), 0),
-    [invoices]
+    [invoices],
   );
 
   const lastPayment = useMemo(() => {
     if (!payments.length) return null;
     const sorted = [...payments].sort(
-      (a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime()
+      (a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime(),
     );
     return sorted[0];
   }, [payments]);
@@ -167,18 +169,22 @@ export default function StudentProfilePage() {
     window.print();
   };
 
-  const attendanceRate = att && att.total > 0 ? ((att.present / att.total) * 100).toFixed(1) : "0";
+  const attendanceRate =
+    att && att.total > 0 ? ((att.present / att.total) * 100).toFixed(1) : "0";
 
   if (!studentId) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/40">
         <Card className="max-w-md p-8 text-center border-none shadow-xl bg-white/80 backdrop-blur-sm rounded-2xl">
           <AlertCircle className="w-16 h-16 mx-auto mb-4 text-amber-500" />
-          <h2 className="mb-2 text-xl font-bold text-slate-800">No Student Selected</h2>
+          <h2 className="mb-2 text-xl font-bold text-slate-800">
+            No Student Selected
+          </h2>
           <p className="mb-6 text-sm text-slate-600">
-            Please select a student from the Students page to view their profile.
+            Please select a student from the Students page to view their
+            profile.
           </p>
-          <Button 
+          <Button
             onClick={() => nav("/app/students")}
             className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
           >
@@ -204,7 +210,7 @@ export default function StudentProfilePage() {
               </h1>
               {student && (
                 <p className="mt-1 text-sm text-slate-600">
-                  <span className="font-semibold">{fullName}</span> 
+                  <span className="font-semibold">{fullName}</span>
                   <span className="mx-2 text-slate-400">•</span>
                   <span className="text-slate-500">{student.studentCode}</span>
                   {student.currentClass && (
@@ -212,8 +218,12 @@ export default function StudentProfilePage() {
                       <span className="mx-2 text-slate-400">•</span>
                       <span className="text-slate-500">
                         {student.currentClass.name}
-                        {student.currentClass.stream ? ` ${student.currentClass.stream}` : ""}
-                        {student.currentClass.year ? ` • ${student.currentClass.year}` : ""}
+                        {student.currentClass.stream
+                          ? ` ${student.currentClass.stream}`
+                          : ""}
+                        {student.currentClass.year
+                          ? ` • ${student.currentClass.year}`
+                          : ""}
                       </span>
                     </>
                   )}
@@ -244,7 +254,9 @@ export default function StudentProfilePage() {
           <div className="flex items-center justify-center py-20">
             <div className="text-center">
               <div className="w-12 h-12 mx-auto mb-4 border-4 border-indigo-200 rounded-full border-t-indigo-600 animate-spin"></div>
-              <p className="text-sm font-medium text-slate-600">Loading profile...</p>
+              <p className="text-sm font-medium text-slate-600">
+                Loading profile...
+              </p>
             </div>
           </div>
         )}
@@ -267,8 +279,12 @@ export default function StudentProfilePage() {
                       <User className="w-4 h-4 text-indigo-600" />
                     </div>
                     <div className="flex-1">
-                      <p className="text-xs font-semibold uppercase text-slate-500">Student Code</p>
-                      <p className="mt-1 font-semibold text-slate-800">{student.studentCode}</p>
+                      <p className="text-xs font-semibold uppercase text-slate-500">
+                        Student Code
+                      </p>
+                      <p className="mt-1 font-semibold text-slate-800">
+                        {student.studentCode}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
@@ -276,8 +292,12 @@ export default function StudentProfilePage() {
                       <User className="w-4 h-4 text-purple-600" />
                     </div>
                     <div className="flex-1">
-                      <p className="text-xs font-semibold uppercase text-slate-500">Full Name</p>
-                      <p className="mt-1 font-semibold text-slate-800">{fullName}</p>
+                      <p className="text-xs font-semibold uppercase text-slate-500">
+                        Full Name
+                      </p>
+                      <p className="mt-1 font-semibold text-slate-800">
+                        {fullName}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
@@ -289,13 +309,21 @@ export default function StudentProfilePage() {
                       )}
                     </div>
                     <div className="flex-1">
-                      <p className="text-xs font-semibold uppercase text-slate-500">Status</p>
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 mt-1 text-xs font-semibold rounded-full ${
-                        student.status === "active" 
-                          ? "bg-emerald-100 text-emerald-700" 
-                          : "bg-red-100 text-red-700"
-                      }`}>
-                        {student.status === "active" ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                      <p className="text-xs font-semibold uppercase text-slate-500">
+                        Status
+                      </p>
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 mt-1 text-xs font-semibold rounded-full ${
+                          student.status === "active"
+                            ? "bg-emerald-100 text-emerald-700"
+                            : "bg-red-100 text-red-700"
+                        }`}
+                      >
+                        {student.status === "active" ? (
+                          <CheckCircle className="w-3 h-3" />
+                        ) : (
+                          <XCircle className="w-3 h-3" />
+                        )}
                         {student.status}
                       </span>
                     </div>
@@ -305,11 +333,15 @@ export default function StudentProfilePage() {
                       <GraduationCap className="w-4 h-4 text-blue-600" />
                     </div>
                     <div className="flex-1">
-                      <p className="text-xs font-semibold uppercase text-slate-500">Current Class</p>
+                      <p className="text-xs font-semibold uppercase text-slate-500">
+                        Current Class
+                      </p>
                       <p className="mt-1 font-semibold text-slate-800">
                         {student.currentClass
                           ? `${student.currentClass.name}${
-                              student.currentClass.stream ? " " + student.currentClass.stream : ""
+                              student.currentClass.stream
+                                ? " " + student.currentClass.stream
+                                : ""
                             }`
                           : "Not assigned"}
                       </p>
@@ -330,7 +362,9 @@ export default function StudentProfilePage() {
                   {guardians.length === 0 ? (
                     <div className="py-8 text-center">
                       <Users className="w-12 h-12 mx-auto mb-3 text-slate-300" />
-                      <p className="font-medium text-slate-600">No guardians added</p>
+                      <p className="font-medium text-slate-600">
+                        No guardians added
+                      </p>
                       <p className="mt-1 text-sm text-slate-400">
                         Use the Guardians page to add them
                       </p>
@@ -338,13 +372,18 @@ export default function StudentProfilePage() {
                   ) : (
                     <div className="space-y-4">
                       {guardians.map((g) => (
-                        <div key={g.id} className="p-4 transition-all border rounded-xl border-slate-100 bg-slate-50/50 hover:bg-slate-100/50">
+                        <div
+                          key={g.id}
+                          className="p-4 transition-all border rounded-xl border-slate-100 bg-slate-50/50 hover:bg-slate-100/50"
+                        >
                           <div className="flex items-start gap-3">
                             <div className="flex items-center justify-center w-10 h-10 text-sm font-bold text-white rounded-full bg-gradient-to-br from-indigo-500 to-purple-600">
                               {g.name[0]?.toUpperCase()}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-slate-800">{g.name}</p>
+                              <p className="font-semibold text-slate-800">
+                                {g.name}
+                              </p>
                               {g.relation && (
                                 <p className="text-xs font-medium capitalize text-slate-500">
                                   {g.relation}
@@ -364,7 +403,9 @@ export default function StudentProfilePage() {
                                   </div>
                                 )}
                                 {!g.email && !g.phone && (
-                                  <p className="text-xs text-slate-400">No contact info</p>
+                                  <p className="text-xs text-slate-400">
+                                    No contact info
+                                  </p>
                                 )}
                               </div>
                             </div>
@@ -392,7 +433,9 @@ export default function StudentProfilePage() {
                     <div className="space-y-4">
                       {/* Attendance Rate */}
                       <div className="p-4 border border-indigo-100 rounded-xl bg-gradient-to-r from-indigo-50 to-purple-50">
-                        <p className="text-sm font-semibold text-slate-600">Attendance Rate</p>
+                        <p className="text-sm font-semibold text-slate-600">
+                          Attendance Rate
+                        </p>
                         <p className="text-3xl font-bold text-transparent bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text">
                           {attendanceRate}%
                         </p>
@@ -403,37 +446,55 @@ export default function StudentProfilePage() {
                         <div className="p-4 border rounded-xl border-slate-100 bg-slate-50/50">
                           <div className="flex items-center gap-2 mb-1">
                             <Calendar className="w-4 h-4 text-slate-500" />
-                            <p className="text-xs font-semibold uppercase text-slate-500">Total Days</p>
+                            <p className="text-xs font-semibold uppercase text-slate-500">
+                              Total Days
+                            </p>
                           </div>
-                          <p className="text-2xl font-bold text-slate-800">{att.total}</p>
+                          <p className="text-2xl font-bold text-slate-800">
+                            {att.total}
+                          </p>
                         </div>
                         <div className="p-4 border rounded-xl border-emerald-100 bg-emerald-50/50">
                           <div className="flex items-center gap-2 mb-1">
                             <CheckCircle className="w-4 h-4 text-emerald-600" />
-                            <p className="text-xs font-semibold uppercase text-emerald-700">Present</p>
+                            <p className="text-xs font-semibold uppercase text-emerald-700">
+                              Present
+                            </p>
                           </div>
-                          <p className="text-2xl font-bold text-emerald-700">{att.present}</p>
+                          <p className="text-2xl font-bold text-emerald-700">
+                            {att.present}
+                          </p>
                         </div>
                         <div className="p-4 border border-red-100 rounded-xl bg-red-50/50">
                           <div className="flex items-center gap-2 mb-1">
                             <XCircle className="w-4 h-4 text-red-600" />
-                            <p className="text-xs font-semibold text-red-700 uppercase">Absent</p>
+                            <p className="text-xs font-semibold text-red-700 uppercase">
+                              Absent
+                            </p>
                           </div>
-                          <p className="text-2xl font-bold text-red-700">{att.absent}</p>
+                          <p className="text-2xl font-bold text-red-700">
+                            {att.absent}
+                          </p>
                         </div>
                         <div className="p-4 border rounded-xl border-amber-100 bg-amber-50/50">
                           <div className="flex items-center gap-2 mb-1">
                             <Clock className="w-4 h-4 text-amber-600" />
-                            <p className="text-xs font-semibold uppercase text-amber-700">Late</p>
+                            <p className="text-xs font-semibold uppercase text-amber-700">
+                              Late
+                            </p>
                           </div>
-                          <p className="text-2xl font-bold text-amber-700">{att.late}</p>
+                          <p className="text-2xl font-bold text-amber-700">
+                            {att.late}
+                          </p>
                         </div>
                       </div>
                     </div>
                   ) : (
                     <div className="py-8 text-center">
                       <Calendar className="w-12 h-12 mx-auto mb-3 text-slate-300" />
-                      <p className="font-medium text-slate-600">No attendance data</p>
+                      <p className="font-medium text-slate-600">
+                        No attendance data
+                      </p>
                       <p className="mt-1 text-sm text-slate-400">
                         Attendance records will appear here
                       </p>
@@ -453,15 +514,21 @@ export default function StudentProfilePage() {
                 <CardContent className="p-6">
                   <div className="space-y-4">
                     {/* Outstanding Amount */}
-                    <div className={`p-4 border rounded-xl ${
-                      outstanding > 0 
-                        ? "bg-gradient-to-r from-red-50 to-pink-50 border-red-100" 
-                        : "bg-gradient-to-r from-emerald-50 to-green-50 border-emerald-100"
-                    }`}>
-                      <p className="text-sm font-semibold text-slate-600">Outstanding Balance</p>
-                      <p className={`text-3xl font-bold ${
-                        outstanding > 0 ? "text-red-600" : "text-emerald-600"
-                      }`}>
+                    <div
+                      className={`p-4 border rounded-xl ${
+                        outstanding > 0
+                          ? "bg-gradient-to-r from-red-50 to-pink-50 border-red-100"
+                          : "bg-gradient-to-r from-emerald-50 to-green-50 border-emerald-100"
+                      }`}
+                    >
+                      <p className="text-sm font-semibold text-slate-600">
+                        Outstanding Balance
+                      </p>
+                      <p
+                        className={`text-3xl font-bold ${
+                          outstanding > 0 ? "text-red-600" : "text-emerald-600"
+                        }`}
+                      >
                         {outstanding.toLocaleString()}
                       </p>
                     </div>
@@ -469,33 +536,67 @@ export default function StudentProfilePage() {
                     {/* Stats */}
                     <div className="grid grid-cols-2 gap-3">
                       <div className="p-4 border rounded-xl border-slate-100 bg-slate-50/50">
-                        <p className="text-xs font-semibold uppercase text-slate-500">Invoices</p>
-                        <p className="text-2xl font-bold text-slate-800">{invoices.length}</p>
+                        <p className="text-xs font-semibold uppercase text-slate-500">
+                          Invoices
+                        </p>
+                        <p className="text-2xl font-bold text-slate-800">
+                          {invoices.length}
+                        </p>
                       </div>
                       <div className="p-4 border rounded-xl border-slate-100 bg-slate-50/50">
-                        <p className="text-xs font-semibold uppercase text-slate-500">Payments</p>
-                        <p className="text-2xl font-bold text-slate-800">{payments.length}</p>
+                        <p className="text-xs font-semibold uppercase text-slate-500">
+                          Payments
+                        </p>
+                        <p className="text-2xl font-bold text-slate-800">
+                          {payments.length}
+                        </p>
                       </div>
                     </div>
 
                     {/* Last Payment */}
+                    {/* Credit Balance */}
+                    {creditBalance > 0 && (
+                      <div className="p-4 border border-emerald-200 rounded-xl bg-gradient-to-r from-emerald-50 to-green-50">
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                          <p className="text-xs font-semibold uppercase text-emerald-700">
+                            Available Credit
+                          </p>
+                        </div>
+                        <p className="text-xl font-bold text-emerald-700">
+                          MWK {creditBalance.toLocaleString()}
+                        </p>
+                        <p className="mt-1 text-xs text-emerald-600">
+                          Will auto-apply on next term activation
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Last Payment */}
                     {lastPayment ? (
                       <div className="p-4 border border-indigo-100 rounded-xl bg-indigo-50/50">
-                        <p className="mb-2 text-xs font-semibold uppercase text-slate-600">Last Payment</p>
+                        <p className="mb-2 text-xs font-semibold uppercase text-slate-600">
+                          Last Payment
+                        </p>
                         <p className="text-xl font-bold text-indigo-700">
-                          {Number(lastPayment.amount).toLocaleString()}
+                          MWK {Number(lastPayment.amount).toLocaleString()}
                         </p>
                         <p className="mt-1 text-xs text-slate-500">
-                          {new Date(lastPayment.paidAt).toLocaleDateString('en-US', { 
-                            month: 'short', 
-                            day: 'numeric', 
-                            year: 'numeric' 
-                          })}
+                          {new Date(lastPayment.paidAt).toLocaleDateString(
+                            "en-US",
+                            {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            },
+                          )}
                         </p>
                       </div>
                     ) : (
                       <div className="p-4 text-center border rounded-xl border-slate-100 bg-slate-50/50">
-                        <p className="text-sm text-slate-500">No payments recorded yet</p>
+                        <p className="text-sm text-slate-500">
+                          No payments recorded yet
+                        </p>
                       </div>
                     )}
                   </div>
@@ -515,7 +616,9 @@ export default function StudentProfilePage() {
                 {!classId && (
                   <div className="py-8 text-center">
                     <AlertCircle className="w-12 h-12 mx-auto mb-3 text-amber-400" />
-                    <p className="font-medium text-slate-600">No class assigned</p>
+                    <p className="font-medium text-slate-600">
+                      No class assigned
+                    </p>
                     <p className="mt-1 text-sm text-slate-400">
                       Assign the student to a class to track results
                     </p>
@@ -535,20 +638,34 @@ export default function StudentProfilePage() {
                     {/* Summary Stats */}
                     <div className="grid grid-cols-3 gap-3">
                       <div className="p-4 border border-indigo-100 rounded-xl bg-indigo-50/50">
-                        <p className="text-xs font-semibold uppercase text-slate-600">Total Points</p>
-                        <p className="text-2xl font-bold text-indigo-700">{result.totalPoints}</p>
+                        <p className="text-xs font-semibold uppercase text-slate-600">
+                          Total Points
+                        </p>
+                        <p className="text-2xl font-bold text-indigo-700">
+                          {result.totalPoints}
+                        </p>
                       </div>
                       <div className="p-4 border border-purple-100 rounded-xl bg-purple-50/50">
-                        <p className="text-xs font-semibold uppercase text-slate-600">Total Marks</p>
-                        <p className="text-2xl font-bold text-purple-700">{result.totalMarks}</p>
+                        <p className="text-xs font-semibold uppercase text-slate-600">
+                          Total Marks
+                        </p>
+                        <p className="text-2xl font-bold text-purple-700">
+                          {result.totalMarks}
+                        </p>
                       </div>
-                      <div className={`p-4 border rounded-xl ${
-                        result.passed 
-                          ? "border-emerald-100 bg-emerald-50/50" 
-                          : "border-red-100 bg-red-50/50"
-                      }`}>
-                        <p className="text-xs font-semibold uppercase text-slate-600">Status</p>
-                        <p className={`text-xl font-bold ${result.passed ? "text-emerald-700" : "text-red-700"}`}>
+                      <div
+                        className={`p-4 border rounded-xl ${
+                          result.passed
+                            ? "border-emerald-100 bg-emerald-50/50"
+                            : "border-red-100 bg-red-50/50"
+                        }`}
+                      >
+                        <p className="text-xs font-semibold uppercase text-slate-600">
+                          Status
+                        </p>
+                        <p
+                          className={`text-xl font-bold ${result.passed ? "text-emerald-700" : "text-red-700"}`}
+                        >
                           {result.passed ? "Passed" : "Failed"}
                         </p>
                       </div>
@@ -579,7 +696,10 @@ export default function StudentProfilePage() {
                           </thead>
                           <tbody className="divide-y divide-slate-100">
                             {result.subjects.map((s) => (
-                              <tr key={s.subjectId} className="transition-colors hover:bg-slate-50/50">
+                              <tr
+                                key={s.subjectId}
+                                className="transition-colors hover:bg-slate-50/50"
+                              >
                                 <td className="px-4 py-3 font-medium text-slate-800">
                                   {s.subjectName || s.subjectId}
                                 </td>
@@ -601,7 +721,10 @@ export default function StudentProfilePage() {
                             ))}
                             {result.subjects.length === 0 && (
                               <tr>
-                                <td colSpan={5} className="py-8 text-center text-slate-500">
+                                <td
+                                  colSpan={5}
+                                  className="py-8 text-center text-slate-500"
+                                >
                                   No subject results available
                                 </td>
                               </tr>

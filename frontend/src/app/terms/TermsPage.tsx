@@ -5,7 +5,22 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calendar, Check, X, Sparkles, Plus, XCircle } from "lucide-react";
+import {
+  Calendar,
+  Check,
+  X,
+  Sparkles,
+  Plus,
+  XCircle,
+  Zap,
+  AlertTriangle,
+  Users,
+  DollarSign,
+  CreditCard,
+  Loader2,
+  Clock,
+  CheckCircle,
+} from "lucide-react";
 
 type Term = {
   id: string;
@@ -14,10 +29,7 @@ type Term = {
   startDate: string;
   endDate: string;
   isActive: boolean;
-};
-
-type TermListResponse = {
-  data: Term[];
+  status: string;
 };
 
 type TermForm = {
@@ -25,15 +37,41 @@ type TermForm = {
   year: string;
   startDate: string;
   endDate: string;
-  isActive: boolean;
+};
+
+type ActivationPreview = {
+  termName: string;
+  studentsWithFees: number;
+  studentsWithCredit: number;
+  totalInvoiceAmount: number;
+  totalCreditToApply: number;
+};
+
+type ActivationResult = {
+  ok: boolean;
+  message: string;
+  invoicesCreated: number;
+  creditsApplied: number;
+  totalCreditAmount: number;
 };
 
 const initialForm: TermForm = {
   name: "",
-  year: "",
+  year: new Date().getFullYear().toString(),
   startDate: "",
   endDate: "",
-  isActive: false,
+};
+
+const STATUS_STYLES: Record<string, string> = {
+  active: "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-600/20",
+  ended: "bg-slate-100 text-slate-600 ring-1 ring-slate-200",
+  upcoming: "bg-blue-100 text-blue-700 ring-1 ring-blue-600/20",
+};
+
+const STATUS_ICONS: Record<string, React.ReactNode> = {
+  active: <Check className="w-3.5 h-3.5" />,
+  ended: <X className="w-3.5 h-3.5" />,
+  upcoming: <Clock className="w-3.5 h-3.5" />,
 };
 
 export default function TermsPage() {
@@ -42,8 +80,16 @@ export default function TermsPage() {
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // Activation preview
+  const [previewTerm, setPreviewTerm] = useState<Term | null>(null);
+  const [preview, setPreview] = useState<ActivationPreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [activating, setActivating] = useState(false);
+  const [activationResult, setActivationResult] =
+    useState<ActivationResult | null>(null);
+
   const load = useCallback(async () => {
-    const { data } = await api.get<TermListResponse>("/api/terms");
+    const { data } = await api.get("/api/terms");
     setTerms(data.data || []);
   }, []);
 
@@ -59,7 +105,6 @@ export default function TermsPage() {
         year: Number(form.year),
         startDate: form.startDate,
         endDate: form.endDate,
-        isActive: form.isActive,
       });
       setForm(initialForm);
       setIsModalOpen(false);
@@ -69,48 +114,80 @@ export default function TermsPage() {
     }
   };
 
-  const setActive = async (id: string) => {
-    await api.post(`/api/terms/${id}/activate`);
-    void load();
+  const openActivationPreview = async (term: Term) => {
+    setPreviewTerm(term);
+    setPreview(null);
+    setActivationResult(null);
+    setPreviewLoading(true);
+    try {
+      const { data } = await api.get(
+        `/api/terms/${term.id}/preview-activation`,
+      );
+      setPreview(data.data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setPreviewLoading(false);
+    }
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
+  const confirmActivate = async () => {
+    if (!previewTerm) return;
+    setActivating(true);
+    try {
+      const { data } = await api.post(`/api/terms/${previewTerm.id}/activate`);
+      setActivationResult(data);
+      void load();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setActivating(false);
+    }
+  };
+
+  const closePreview = () => {
+    setPreviewTerm(null);
+    setPreview(null);
+    setActivationResult(null);
+  };
+
+  const formatDate = (d: string) =>
+    new Date(d).toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
       year: "numeric",
     });
-  };
 
   return (
     <div className="min-h-screen p-6 bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/40">
       <div className="mx-auto space-y-6 max-w-7xl">
-        {/* Page Header */}
-        <div className="flex items-center justify-between mb-2">
+        {/* Header */}
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg shadow-indigo-200/50">
+            <div className="p-2.5 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg">
               <Calendar className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold tracking-tight text-transparent bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text">
+              <h1 className="text-3xl font-bold text-slate-900">
                 Academic Terms
               </h1>
               <p className="text-sm text-slate-500 mt-0.5">
-                Manage school terms and semesters
+                Manage school terms — activating a term auto-generates invoices
+                and applies credits
               </p>
             </div>
           </div>
           <Button
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 px-6 font-semibold text-white transition-all shadow-lg h-11 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 rounded-xl shadow-indigo-200/50 hover:shadow-xl"
+            className="flex items-center gap-2 px-6 font-semibold text-white h-11 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 rounded-xl shadow-lg"
           >
             <Plus className="w-5 h-5" />
             Create New Term
           </Button>
         </div>
 
-        {/* Terms List Card */}
-        <Card className="overflow-hidden border-none shadow-xl bg-white/80 backdrop-blur-sm rounded-2xl">
+        {/* Terms Table */}
+        <Card className="border-none shadow-xl rounded-2xl overflow-hidden">
           <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-indigo-50/30 border-slate-100">
             <CardTitle className="text-lg font-bold text-slate-800">
               All Terms
@@ -121,75 +198,75 @@ export default function TermsPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b bg-slate-50/50 border-slate-100">
-                    <th className="px-6 py-4 text-xs font-bold tracking-wider text-left uppercase text-slate-600">
-                      Name
-                    </th>
-                    <th className="px-6 py-4 text-xs font-bold tracking-wider text-left uppercase text-slate-600">
-                      Year
-                    </th>
-                    <th className="px-6 py-4 text-xs font-bold tracking-wider text-left uppercase text-slate-600">
-                      Start Date
-                    </th>
-                    <th className="px-6 py-4 text-xs font-bold tracking-wider text-left uppercase text-slate-600">
-                      End Date
-                    </th>
-                    <th className="px-6 py-4 text-xs font-bold tracking-wider text-left uppercase text-slate-600">
-                      Status
-                    </th>
-                    <th className="px-6 py-4 text-xs font-bold tracking-wider text-left uppercase text-slate-600">
-                      Actions
-                    </th>
+                    {[
+                      "Name",
+                      "Year",
+                      "Start Date",
+                      "End Date",
+                      "Status",
+                      "Actions",
+                    ].map((h) => (
+                      <th
+                        key={h}
+                        className="px-6 py-4 text-xs font-bold tracking-wider text-left uppercase text-slate-600"
+                      >
+                        {h}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {terms.map((t) => (
-                    <tr
-                      key={t.id}
-                      className="transition-colors hover:bg-slate-50/50 group"
-                    >
-                      <td className="px-6 py-4">
-                        <span className="font-semibold text-slate-900">
+                  {terms.map((t) => {
+                    const statusKey =
+                      t.status || (t.isActive ? "active" : "upcoming");
+                    return (
+                      <tr
+                        key={t.id}
+                        className="hover:bg-slate-50/50 transition-colors group"
+                      >
+                        <td className="px-6 py-4 font-semibold text-slate-900">
                           {t.name}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-slate-600">{t.year}</span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-slate-600">
+                        </td>
+                        <td className="px-6 py-4 text-slate-600">{t.year}</td>
+                        <td className="px-6 py-4 text-slate-600">
                           {formatDate(t.startDate)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-slate-600">
+                        </td>
+                        <td className="px-6 py-4 text-slate-600">
                           {formatDate(t.endDate)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        {t.isActive ? (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-600/20">
-                            <Check className="w-3.5 h-3.5" />
-                            Active
+                        </td>
+                        <td className="px-6 py-4">
+                          <span
+                            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${
+                              STATUS_STYLES[statusKey] ||
+                              STATUS_STYLES["upcoming"]
+                            }`}
+                          >
+                            {STATUS_ICONS[statusKey] ||
+                              STATUS_ICONS["upcoming"]}
+                            {statusKey.charAt(0).toUpperCase() +
+                              statusKey.slice(1)}
                           </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">
-                            <X className="w-3.5 h-3.5" />
-                            Inactive
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4">
-                        <Button
-                          variant="outline"
-                          disabled={t.isActive}
-                          onClick={() => void setActive(t.id)}
-                          className="px-4 text-xs font-semibold transition-all rounded-lg h-9 border-slate-200 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-inherit"
-                        >
-                          {t.isActive ? "Current" : "Set Active"}
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="px-6 py-4">
+                          {!t.isActive ? (
+                            <Button
+                              variant="outline"
+                              onClick={() => openActivationPreview(t)}
+                              className="flex items-center gap-2 px-4 text-xs font-semibold h-9 rounded-lg border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                            >
+                              <Zap className="w-3.5 h-3.5" />
+                              Set Active
+                            </Button>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-700">
+                              <CheckCircle className="w-3.5 h-3.5" />
+                              Current
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                   {terms.length === 0 && (
                     <tr>
                       <td colSpan={6} className="py-16 text-center">
@@ -197,14 +274,12 @@ export default function TermsPage() {
                           <div className="p-4 rounded-full bg-slate-100">
                             <Calendar className="w-8 h-8 text-slate-400" />
                           </div>
-                          <div>
-                            <p className="font-medium text-slate-600">
-                              No terms created yet
-                            </p>
-                            <p className="mt-1 text-sm text-slate-400">
-                              Create your first term to get started
-                            </p>
-                          </div>
+                          <p className="font-medium text-slate-600">
+                            No terms yet
+                          </p>
+                          <p className="text-sm text-slate-400">
+                            Create your first term to get started
+                          </p>
                         </div>
                       </td>
                     </tr>
@@ -216,14 +291,13 @@ export default function TermsPage() {
         </Card>
       </div>
 
-      {/* Modal */}
+      {/* Create Term Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 duration-200 bg-black/50 backdrop-blur-sm animate-in fade-in">
-          <div className="relative w-full max-w-2xl duration-200 bg-white shadow-2xl rounded-2xl animate-in zoom-in-95">
-            {/* Modal Header */}
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="relative w-full max-w-2xl bg-white shadow-2xl rounded-2xl">
             <div className="flex items-center justify-between px-6 py-5 border-b bg-gradient-to-r from-slate-50 to-indigo-50/30 rounded-t-2xl border-slate-100">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg shadow-md bg-gradient-to-br from-indigo-500 to-purple-600">
+                <div className="p-2 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600">
                   <Sparkles className="w-5 h-5 text-white" />
                 </div>
                 <h2 className="text-xl font-bold text-slate-800">
@@ -232,98 +306,71 @@ export default function TermsPage() {
               </div>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="p-2 transition-colors rounded-lg hover:bg-slate-100"
+                className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
               >
-                <XCircle className="w-5 h-5 text-slate-400 hover:text-slate-600" />
+                <XCircle className="w-5 h-5 text-slate-400" />
               </button>
             </div>
-
-            {/* Modal Content */}
-            <div className="p-6">
-              <div className="grid gap-5 md:grid-cols-2">
-                <div className="grid gap-2">
-                  <Label className="text-sm font-semibold text-slate-700">
-                    Term Name
-                  </Label>
-                  <Input
-                    placeholder="e.g., Term 1"
-                    value={form.name}
-                    onChange={(e) =>
-                      setForm((prev) => ({ ...prev, name: e.target.value }))
-                    }
-                    className="h-11 border-slate-200 focus:border-indigo-400 focus:ring-indigo-400/20 rounded-xl"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label className="text-sm font-semibold text-slate-700">
-                    Academic Year
-                  </Label>
-                  <Input
-                    type="number"
-                    placeholder="e.g., 2026"
-                    value={form.year}
-                    onChange={(e) =>
-                      setForm((prev) => ({ ...prev, year: e.target.value }))
-                    }
-                    className="h-11 border-slate-200 focus:border-indigo-400 focus:ring-indigo-400/20 rounded-xl"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label className="text-sm font-semibold text-slate-700">
-                    Start Date
-                  </Label>
-                  <Input
-                    type="date"
-                    value={form.startDate}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        startDate: e.target.value,
-                      }))
-                    }
-                    className="h-11 border-slate-200 focus:border-indigo-400 focus:ring-indigo-400/20 rounded-xl"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label className="text-sm font-semibold text-slate-700">
-                    End Date
-                  </Label>
-                  <Input
-                    type="date"
-                    value={form.endDate}
-                    onChange={(e) =>
-                      setForm((prev) => ({ ...prev, endDate: e.target.value }))
-                    }
-                    className="h-11 border-slate-200 focus:border-indigo-400 focus:ring-indigo-400/20 rounded-xl"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="inline-flex items-center gap-3 px-4 py-3 transition-all border border-indigo-100 cursor-pointer bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl hover:from-indigo-100 hover:to-purple-100">
-                    <input
-                      type="checkbox"
-                      className="w-5 h-5 text-indigo-600 border-indigo-300 rounded focus:ring-2 focus:ring-indigo-500 focus:ring-offset-0"
-                      checked={form.isActive}
-                      onChange={(e) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          isActive: e.target.checked,
-                        }))
-                      }
-                    />
-                    <span className="text-sm font-medium text-slate-700">
-                      Set as current active term
-                    </span>
-                  </label>
-                </div>
+            <div className="p-6 grid gap-5 md:grid-cols-2">
+              <div className="grid gap-2">
+                <Label className="text-sm font-semibold text-slate-700">
+                  Term Name
+                </Label>
+                <Input
+                  placeholder="e.g., Term 1"
+                  value={form.name}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, name: e.target.value }))
+                  }
+                  className="h-11 rounded-xl border-slate-200"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label className="text-sm font-semibold text-slate-700">
+                  Academic Year
+                </Label>
+                <Input
+                  type="number"
+                  placeholder="e.g., 2026"
+                  value={form.year}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, year: e.target.value }))
+                  }
+                  className="h-11 rounded-xl border-slate-200"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label className="text-sm font-semibold text-slate-700">
+                  Start Date
+                </Label>
+                <Input
+                  type="date"
+                  value={form.startDate}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, startDate: e.target.value }))
+                  }
+                  className="h-11 rounded-xl border-slate-200"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label className="text-sm font-semibold text-slate-700">
+                  End Date
+                </Label>
+                <Input
+                  type="date"
+                  value={form.endDate}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, endDate: e.target.value }))
+                  }
+                  className="h-11 rounded-xl border-slate-200"
+                />
               </div>
             </div>
-
-            {/* Modal Footer */}
             <div className="flex gap-3 px-6 py-4 border-t bg-slate-50/50 rounded-b-2xl border-slate-100">
               <Button
                 onClick={() => setIsModalOpen(false)}
                 variant="outline"
-                className="flex-1 font-semibold transition-all h-11 border-slate-300 hover:bg-slate-100 rounded-xl"
+                className="flex-1 h-11 rounded-xl border-slate-300"
               >
                 Cancel
               </Button>
@@ -336,10 +383,200 @@ export default function TermsPage() {
                   !form.endDate ||
                   loading
                 }
-                className="flex-1 px-8 font-semibold text-white transition-all shadow-lg h-11 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 rounded-xl shadow-indigo-200/50 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                className="flex-1 h-11 font-semibold text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 rounded-xl disabled:opacity-50"
               >
                 {loading ? "Saving..." : "Save Term"}
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Activation Preview Modal */}
+      {previewTerm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="relative w-full max-w-lg bg-white shadow-2xl rounded-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-5 border-b bg-gradient-to-r from-amber-50 to-orange-50/30 rounded-t-2xl border-amber-100">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600">
+                  <Zap className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-800">
+                    Activate Term
+                  </h2>
+                  <p className="text-sm text-slate-500">
+                    {previewTerm.name} {previewTerm.year}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={closePreview}
+                className="p-2 rounded-lg hover:bg-slate-100"
+              >
+                <XCircle className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Success Result */}
+              {activationResult ? (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
+                    <CheckCircle className="w-6 h-6 text-emerald-600 shrink-0" />
+                    <div>
+                      <p className="font-semibold text-emerald-800">
+                        Term Activated Successfully!
+                      </p>
+                      <p className="text-sm text-emerald-600 mt-0.5">
+                        {activationResult.message}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="p-4 border border-slate-100 rounded-xl text-center">
+                      <p className="text-2xl font-bold text-indigo-700">
+                        {activationResult.invoicesCreated}
+                      </p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Invoices Created
+                      </p>
+                    </div>
+                    <div className="p-4 border border-slate-100 rounded-xl text-center">
+                      <p className="text-2xl font-bold text-emerald-700">
+                        {activationResult.creditsApplied}
+                      </p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Credits Applied
+                      </p>
+                    </div>
+                    <div className="p-4 border border-slate-100 rounded-xl text-center">
+                      <p className="text-lg font-bold text-emerald-700">
+                        MWK{" "}
+                        {activationResult.totalCreditAmount.toLocaleString()}
+                      </p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Total Credit
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={closePreview}
+                    className="w-full h-11 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold"
+                  >
+                    Done
+                  </Button>
+                </div>
+              ) : previewLoading ? (
+                <div className="flex flex-col items-center gap-3 py-8">
+                  <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+                  <p className="text-sm text-slate-500">
+                    Calculating preview...
+                  </p>
+                </div>
+              ) : preview ? (
+                <div className="space-y-4">
+                  {/* Warning */}
+                  <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-semibold text-amber-800">
+                        Review before activating
+                      </p>
+                      <p className="text-sm text-amber-700 mt-1">
+                        The previous active term will be marked as <b>Ended</b>.
+                        This cannot be undone.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Preview Stats */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-4 border border-slate-100 rounded-xl bg-slate-50">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Users className="w-4 h-4 text-blue-600" />
+                        <p className="text-xs font-semibold text-slate-600 uppercase">
+                          Students with Fees
+                        </p>
+                      </div>
+                      <p className="text-2xl font-bold text-blue-700">
+                        {preview.studentsWithFees}
+                      </p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        invoices will be created
+                      </p>
+                    </div>
+
+                    <div className="p-4 border border-emerald-100 rounded-xl bg-emerald-50">
+                      <div className="flex items-center gap-2 mb-2">
+                        <CreditCard className="w-4 h-4 text-emerald-600" />
+                        <p className="text-xs font-semibold text-slate-600 uppercase">
+                          Students with Credit
+                        </p>
+                      </div>
+                      <p className="text-2xl font-bold text-emerald-700">
+                        {preview.studentsWithCredit}
+                      </p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        credits will auto-apply
+                      </p>
+                    </div>
+
+                    <div className="p-4 border border-slate-100 rounded-xl bg-slate-50">
+                      <div className="flex items-center gap-2 mb-2">
+                        <DollarSign className="w-4 h-4 text-indigo-600" />
+                        <p className="text-xs font-semibold text-slate-600 uppercase">
+                          Total Invoices
+                        </p>
+                      </div>
+                      <p className="text-lg font-bold text-indigo-700">
+                        MWK {preview.totalInvoiceAmount.toLocaleString()}
+                      </p>
+                    </div>
+
+                    <div className="p-4 border border-emerald-100 rounded-xl bg-emerald-50">
+                      <div className="flex items-center gap-2 mb-2">
+                        <DollarSign className="w-4 h-4 text-emerald-600" />
+                        <p className="text-xs font-semibold text-slate-600 uppercase">
+                          Credits to Apply
+                        </p>
+                      </div>
+                      <p className="text-lg font-bold text-emerald-700">
+                        MWK {preview.totalCreditToApply.toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-3 pt-2">
+                    <Button
+                      variant="outline"
+                      onClick={closePreview}
+                      className="flex-1 h-11 rounded-xl border-slate-300"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={confirmActivate}
+                      disabled={activating}
+                      className="flex-1 h-11 font-semibold text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 rounded-xl"
+                    >
+                      {activating ? (
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Activating...
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <Zap className="w-4 h-4" />
+                          Confirm Activate
+                        </div>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>

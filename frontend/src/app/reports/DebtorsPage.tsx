@@ -374,12 +374,12 @@ export default function DebtorsPage() {
         {/* Page Header */}
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl shadow-lg shadow-amber-200/50">
-              <DollarSign className="w-6 h-6 text-white" />
+            <div className="px-3 py-2.5 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl shadow-lg shadow-amber-200/50 flex items-center justify-center">
+              <span className="text-white font-bold text-lg">MK</span>
             </div>
             <div>
               <h1 className="text-3xl font-bold tracking-tight text-transparent bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text">
-                Debtors Report
+                Outstanding Fees Report
               </h1>
               <p className="text-sm text-slate-500 mt-0.5">
                 Track student fees, payments, and outstanding balances
@@ -614,7 +614,7 @@ export default function DebtorsPage() {
                     <FileText className="w-5 h-5 text-amber-600" />
                   </div>
                   <div>
-                    <div>Debtors Report</div>
+                    <div>Fee Balance Report</div>
                     <div className="text-sm font-normal text-slate-500">
                       As of{" "}
                       {new Date(asOf).toLocaleDateString("en-US", {

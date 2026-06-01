@@ -34,8 +34,9 @@ type Invoice = {
   status: "unpaid" | "partial" | "paid" | string;
   issuedAt: string;
   termId?: string | null;
+  overrideAmount?: number | null; // Add this
+  overrideReason?: string | null; // Add this
 };
-
 type Payment = {
   id: string;
   invoiceId: string;
@@ -71,9 +72,19 @@ type InvoiceByStudent = {
   id: string;
   status: "unpaid" | "partial" | "paid" | string;
   amount: number | string;
+  overrideAmount?: number | null;
+  overrideReason?: string | null;
 };
 type InvoicesByStudentResponse = { data: InvoiceByStudent[] };
 
+type CreditResponse = { data: CreditRow[]; totalCredit: number };
+type CreditRow = {
+  id: string;
+  amount: number;
+  source: string;
+  status: string;
+  createdAt: string;
+};
 // helper: map studentId -> { code, name }
 type StudentMap = Record<
   string,
@@ -98,13 +109,35 @@ export default function FeesPage() {
   const [openInv, setOpenInv] = useState(false);
   const [openPay, setOpenPay] = useState(false);
 
+  // Override invoice dialog
+  const [openOverride, setOpenOverride] = useState(false);
+  const [overrideInvId, setOverrideInvId] = useState("");
+  const [overrideAmount, setOverrideAmount] = useState("");
+  const [overrideReason, setOverrideReason] = useState("");
+  const [overrideSaving, setOverrideSaving] = useState(false);
+
+  // Credit balance
+  const [creditBalance, setCreditBalance] = useState<number>(0);
+
   // Add invoice: student search within selected class
   const [studQuery, setStudQuery] = useState("");
   const [studOpts, setStudOpts] = useState<StudentOpt[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<StudentOpt | null>(
-    null
+    null,
   );
   const [amount, setAmount] = useState("");
+
+  // Fee breakdown for selected student
+  const [feeBreakdown, setFeeBreakdown] = useState<
+    {
+      name: string;
+      amount: number;
+      optional: boolean;
+      scope: string;
+    }[]
+  >([]);
+  const [feeTotal, setFeeTotal] = useState<number | null>(null);
+  const [feeLoading, setFeeLoading] = useState(false);
 
   // Record payment: student search (class-aware) + invoice dropdown
   const [payStudentQuery, setPayStudentQuery] = useState("");
@@ -118,6 +151,15 @@ export default function FeesPage() {
   const [payMethod, setPayMethod] = useState("");
   const [payRef, setPayRef] = useState("");
 
+  // ---------- load credit balance ----------
+  const loadCredits = useCallback(async () => {
+    try {
+      const { data } = await api.get<CreditResponse>("/api/fees/credits");
+      setCreditBalance(data.totalCredit || 0);
+    } catch {
+      // fail silently
+    }
+  }, []);
   // ---------- load terms ----------
   const loadTerms = useCallback(async () => {
     const { data } = await api.get<TermsResponse>("/api/terms");
@@ -185,15 +227,16 @@ export default function FeesPage() {
         setLoading(false);
       }
     },
-    [termId, selectedClassId]
+    [termId, selectedClassId],
   );
 
   useEffect(() => {
     void (async () => {
       await loadTerms();
       await loadFees();
+      await loadCredits();
     })();
-  }, [loadTerms, loadFees]);
+  }, [loadTerms, loadFees, loadCredits]);
 
   useEffect(() => {
     if (termId) {
@@ -213,7 +256,7 @@ export default function FeesPage() {
       if (!info) return id;
       return `${info.code} • ${info.name}`;
     },
-    [students]
+    [students],
   );
 
   const getStatusBadge = (status: string) => {
@@ -289,7 +332,7 @@ export default function FeesPage() {
       });
       setter(opts);
     },
-    [selectedClassId]
+    [selectedClassId],
   );
 
   // Add invoice: search
@@ -300,6 +343,42 @@ export default function FeesPage() {
       setStudOpts([]);
     }
   }, [studQuery, openInv, selectedClassId, searchStudents]);
+
+  // When student selected, fetch fee breakdown for their class
+  useEffect(() => {
+    const fetchBreakdown = async () => {
+      if (!selectedStudent || !termId) {
+        setFeeBreakdown([]);
+        setFeeTotal(null);
+        return;
+      }
+
+      // Find the student's classId from the students map
+      const studentClassId = selectedClassId;
+      if (!studentClassId) return;
+
+      setFeeLoading(true);
+      try {
+        const { data } = await api.get("/api/fee-components/calculate", {
+          params: { termId, classId: studentClassId },
+        });
+        const breakdown = data.data?.breakdown || [];
+        const total = data.data?.total || 0;
+        setFeeBreakdown(breakdown);
+        setFeeTotal(total);
+        // Auto-fill amount with calculated total
+        if (total > 0) setAmount(String(total));
+      } catch (e) {
+        console.error(e);
+        setFeeBreakdown([]);
+        setFeeTotal(null);
+      } finally {
+        setFeeLoading(false);
+      }
+    };
+
+    void fetchBreakdown();
+  }, [selectedStudent, termId, selectedClassId]);
 
   // Record payment: search
   useEffect(() => {
@@ -325,13 +404,13 @@ export default function FeesPage() {
             studentId: payStudent.id,
             termId: termId || undefined,
           },
-        }
+        },
       );
       const opts =
         (data.data || []).map((i) => ({
           id: i.id,
           label: `${i.id.slice(0, 8)} • ${String(
-            i.status || ""
+            i.status || "",
           ).toUpperCase()} • MWK ${Number(i.amount).toLocaleString()}`,
           amount: Number(i.amount),
         })) ?? [];
@@ -349,7 +428,27 @@ export default function FeesPage() {
     void loadInvoicesForStudent();
   }, [payStudent, termId]);
 
-  // ---------- actions ----------
+  const saveOverride = async () => {
+    if (!overrideInvId || !overrideAmount) return;
+    setOverrideSaving(true);
+    try {
+      await api.put(`/api/fees/invoices/${overrideInvId}/override`, {
+        overrideAmount: Number(overrideAmount),
+        overrideReason: overrideReason.trim() || undefined,
+      });
+      setOpenOverride(false);
+      setOverrideInvId("");
+      setOverrideAmount("");
+      setOverrideReason("");
+      void loadFees();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } };
+      alert(err.response?.data?.error || "Failed to save override");
+    } finally {
+      setOverrideSaving(false);
+    }
+  };
+
   const addInvoice = async () => {
     if (!selectedClassId) {
       alert("Please select a class at the top first.");
@@ -364,6 +463,8 @@ export default function FeesPage() {
     setSelectedStudent(null);
     setStudQuery("");
     setAmount("");
+    setFeeBreakdown([]);
+    setFeeTotal(null);
     setOpenInv(false);
     void loadFees();
   };
@@ -415,15 +516,17 @@ export default function FeesPage() {
         <table>
           <tbody>
             <tr><th>Student</th><td>${r.student.code} • ${r.student.name}${
-      r.student.klass ? " (" + r.student.klass + ")" : ""
-    }</td></tr>
+              r.student.klass ? " (" + r.student.klass + ")" : ""
+            }</td></tr>
             <tr><th>Invoice</th><td>${r.invoice.id || "-"} • ${
-      r.invoice.status || "-"
-    } • Amount: <span class="currency">MWK ${
-      r.invoice.amount != null ? Number(r.invoice.amount).toLocaleString() : "-"
-    }</span></td></tr>
+              r.invoice.status || "-"
+            } • Amount: <span class="currency">MWK ${
+              r.invoice.amount != null
+                ? Number(r.invoice.amount).toLocaleString()
+                : "-"
+            }</span></td></tr>
             <tr><th>Payment Amount</th><td><span class="currency">MWK ${Number(
-              r.amount
+              r.amount,
             ).toLocaleString()}</span></td></tr>
             <tr><th>Method</th><td>${r.method || "-"}</td></tr>
             <tr><th>Reference</th><td>${r.reference || "-"}</td></tr>
@@ -478,7 +581,7 @@ export default function FeesPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <Card className="shadow-sm border-slate-200">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -548,8 +651,28 @@ export default function FeesPage() {
             </div>
           </CardContent>
         </Card>
-      </div>
 
+        <Card className="shadow-sm border-emerald-200 bg-gradient-to-br from-emerald-50 to-green-50">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-emerald-700">
+                  Total Credits
+                </p>
+                <p className="text-2xl font-bold text-emerald-700">
+                  MWK {creditBalance.toLocaleString()}
+                </p>
+                <p className="text-xs text-emerald-600 mt-1">
+                  Available for next term
+                </p>
+              </div>
+              <div className="p-2 rounded-lg bg-emerald-100">
+                <DollarSign className="w-5 h-5 text-emerald-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
       {/* Controls Bar */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -652,10 +775,75 @@ export default function FeesPage() {
                   )}
                 </div>
 
+                {/* Fee Breakdown from Components */}
+                {selectedStudent && (
+                  <div className="rounded-xl border border-slate-200 overflow-hidden">
+                    <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                      <span className="text-sm font-semibold text-slate-700">
+                        Fee Breakdown
+                      </span>
+                      {feeLoading && (
+                        <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
+                      )}
+                    </div>
+
+                    {!feeLoading && feeBreakdown.length === 0 && (
+                      <div className="px-4 py-3 text-sm text-slate-500">
+                        No fee components configured for this term/class. Enter
+                        amount manually below.
+                      </div>
+                    )}
+
+                    {!feeLoading && feeBreakdown.length > 0 && (
+                      <div className="divide-y divide-slate-100">
+                        {feeBreakdown.map((item, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center justify-between px-4 py-2.5"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm text-slate-700">
+                                {item.name}
+                              </span>
+                              {item.optional && (
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">
+                                  Optional
+                                </span>
+                              )}
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                                {item.scope === "school"
+                                  ? "School-wide"
+                                  : "Class"}
+                              </span>
+                            </div>
+                            <span className="text-sm font-semibold text-slate-800">
+                              MWK {Number(item.amount).toLocaleString()}
+                            </span>
+                          </div>
+                        ))}
+                        {/* Total Row */}
+                        <div className="flex items-center justify-between px-4 py-3 bg-indigo-50">
+                          <span className="text-sm font-bold text-indigo-800">
+                            Total Fee
+                          </span>
+                          <span className="text-base font-bold text-indigo-700">
+                            MWK {Number(feeTotal).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="grid gap-2">
                   <Label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
                     <DollarSign className="w-4 h-4 text-emerald-600" />
-                    Amount
+                    Invoice Amount
+                    {feeTotal !== null && (
+                      <span className="text-xs font-normal text-slate-400">
+                        (auto-filled from components — edit to override)
+                      </span>
+                    )}
                   </Label>
                   <div className="relative">
                     <div className="absolute font-medium -translate-y-1/2 left-3 top-1/2 text-slate-600">
@@ -670,12 +858,19 @@ export default function FeesPage() {
                     />
                   </div>
                   {amount && Number(amount) > 0 && (
-                    <div className="text-xs font-medium text-emerald-600">
-                      {Number(amount).toLocaleString()} Malawian Kwacha
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-emerald-600">
+                        {Number(amount).toLocaleString()} Malawian Kwacha
+                      </span>
+                      {feeTotal !== null && Number(amount) !== feeTotal && (
+                        <span className="text-xs text-amber-600 font-medium">
+                          ⚠ Modified from calculated MWK{" "}
+                          {feeTotal.toLocaleString()}
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>
-
                 <div className="flex justify-end gap-3 pt-2">
                   <Button
                     variant="outline"
@@ -906,6 +1101,9 @@ export default function FeesPage() {
                   <th className="px-6 py-4 text-xs font-semibold tracking-wider text-left uppercase text-slate-600">
                     Issued Date
                   </th>
+                  <th className="px-6 py-4 text-xs font-semibold tracking-wider text-left uppercase text-slate-600">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -941,6 +1139,32 @@ export default function FeesPage() {
                         day: "numeric",
                         year: "numeric",
                       })}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        {/* Show override badge if overridden */}
+                        {i.overrideAmount && (
+                          <span className="px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-700">
+                            Override: MWK{" "}
+                            {Number(i.overrideAmount).toLocaleString()}
+                          </span>
+                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setOverrideInvId(i.id);
+                            setOverrideAmount(
+                              String(i.overrideAmount ?? i.amount),
+                            );
+                            setOverrideReason("");
+                            setOpenOverride(true);
+                          }}
+                          className="flex items-center gap-1.5 rounded-lg border-amber-200 text-amber-700 hover:bg-amber-50 text-xs"
+                        >
+                          Override
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1096,6 +1320,83 @@ export default function FeesPage() {
           </div>
         </CardContent>
       </Card>
+      {/* Override Invoice Dialog */}
+      <Dialog open={openOverride} onOpenChange={setOpenOverride}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600">
+                <DollarSign className="w-5 h-5 text-white" />
+              </div>
+              <DialogTitle className="text-lg font-semibold text-slate-800">
+                Override Invoice Amount
+              </DialogTitle>
+            </div>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
+              Override the auto-calculated amount for this specific student. Use
+              this for scholarships, exemptions, or special cases.
+            </div>
+            <div className="grid gap-2">
+              <Label className="text-sm font-semibold text-slate-700">
+                New Amount (MWK)
+              </Label>
+              <div className="relative">
+                <div className="absolute font-medium -translate-y-1/2 left-3 top-1/2 text-slate-600 text-sm">
+                  MWK
+                </div>
+                <Input
+                  type="number"
+                  value={overrideAmount}
+                  onChange={(e) => setOverrideAmount(e.target.value)}
+                  className="h-11 pl-14 rounded-xl border-slate-300"
+                  placeholder="e.g. 150000"
+                />
+              </div>
+              {overrideAmount && Number(overrideAmount) > 0 && (
+                <p className="text-xs text-emerald-600 font-medium">
+                  MWK {Number(overrideAmount).toLocaleString()} Kwacha
+                </p>
+              )}
+            </div>
+            <div className="grid gap-2">
+              <Label className="text-sm font-semibold text-slate-700">
+                Reason (optional)
+              </Label>
+              <Input
+                value={overrideReason}
+                onChange={(e) => setOverrideReason(e.target.value)}
+                placeholder="e.g. Scholarship student, partial exemption"
+                className="h-11 rounded-xl border-slate-300"
+              />
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button
+                variant="outline"
+                onClick={() => setOpenOverride(false)}
+                className="h-10 px-6 rounded-xl border-slate-300"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={saveOverride}
+                disabled={overrideSaving || !overrideAmount}
+                className="h-10 px-6 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-semibold"
+              >
+                {overrideSaving ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Saving...
+                  </div>
+                ) : (
+                  "Save Override"
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

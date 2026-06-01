@@ -28,6 +28,7 @@ import {
   UserCircle,
   Menu,
   X,
+  FileText,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 
@@ -147,6 +148,16 @@ function Sidebar() {
         bgColor: "bg-rose-50",
         borderColor: "border-rose-500",
       },
+
+      {
+        to: "/app/reports/fees",
+        label: "Fee Report",
+        icon: FileText,
+        roles: ["admin", "bursar"],
+        color: "text-indigo-600",
+        bgColor: "bg-indigo-50",
+        borderColor: "border-indigo-500",
+      },
       {
         to: "/app/exams/my",
         label: "My Subjects",
@@ -183,8 +194,17 @@ function Sidebar() {
         bgColor: "bg-fuchsia-50",
         borderColor: "border-fuchsia-500",
       },
+      {
+        to: "/app/settings",
+        label: "Settings",
+        icon: Settings,
+        roles: ["admin"],
+        color: "text-indigo-600",
+        bgColor: "bg-indigo-50",
+        borderColor: "border-indigo-500",
+      },
     ],
-    []
+    [],
   );
 
   // Filter menu items based on user role

@@ -15,7 +15,12 @@ router.post("/payments", ctrl.createPayment);
 router.post(
   "/payments/:id/notify-guardians",
   requireRole("admin", "bursar"),
-  ctrl.notifyGuardiansForPayment
+  ctrl.notifyGuardiansForPayment,
 );
-
+router.put(
+  "/invoices/:id/override",
+  requireRole("admin", "bursar"),
+  ctrl.overrideInvoice,
+);
+router.get("/credits", requireRole("admin", "bursar"), ctrl.listCredits);
 module.exports = router;

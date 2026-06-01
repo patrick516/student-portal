@@ -31,6 +31,36 @@ exports.list = async (req, res) => {
   }
 };
 
+// Auto-generate staff code from school name e.g. "Mpatsa Community Secondary School" → "MCSS"
+async function generateStaffCode(schoolId) {
+  const school = await prisma.school.findUnique({ where: { id: schoolId } });
+  const schoolName = school?.name || "SCH";
+
+  // Take first letter of each word, uppercase, max 4 chars
+  const prefix = schoolName
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w[0].toUpperCase())
+    .join("")
+    .slice(0, 4);
+
+  // Count existing users in this school to get next number
+  const count = await prisma.user.count({ where: { schoolId } });
+  const serial = String(count + 1).padStart(4, "0");
+
+  const candidate = `${prefix}${serial}`;
+
+  // Ensure uniqueness — if taken, increment
+  const existing = await prisma.user.findUnique({
+    where: { staffCode: candidate },
+  });
+  if (existing) {
+    const serial2 = String(count + 2).padStart(4, "0");
+    return `${prefix}${serial2}`;
+  }
+  return candidate;
+}
+
 exports.create = async (req, res) => {
   try {
     const { name, email, password, role, staffCode, phone, employmentStart } =
@@ -45,6 +75,10 @@ exports.create = async (req, res) => {
     const exists = await prisma.user.findUnique({ where: { email } });
     if (exists) return res.status(409).json({ error: "Email already in use" });
 
+    // Auto-generate staff code if not provided
+    const finalStaffCode =
+      staffCode || (await generateStaffCode(req.user.schoolId));
+
     const passwordHash = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
       data: {
@@ -55,7 +89,7 @@ exports.create = async (req, res) => {
         passwordHash,
         isActive: true,
         mustChangePassword: true,
-        staffCode: staffCode || null,
+        staffCode: finalStaffCode,
         phone: phone || null,
         employmentStart: employmentStart ? new Date(employmentStart) : null,
       },
@@ -93,12 +127,11 @@ exports.create = async (req, res) => {
 };
 
 // PUT /api/users/:id { name?, email?, role?, isActive? }
-// PUT /api/users/:id { name?, email?, role?, isActive? }
 exports.update = async (req, res) => {
   try {
     const { id } = req.params;
     const { name, email, role, isActive } = req.body || {};
-    const currentUser = req.user; // logged-in headteacher/admin
+    const currentUser = req.user; // logged in headteacher/admin
 
     const allowedRoles = ["admin", "teacher", "bursar", "viewer"];
 
@@ -199,7 +232,6 @@ exports.update = async (req, res) => {
       });
     }
 
-    // 4) Apply update
     const updated = await prisma.user.update({
       where: { id: target.id },
       data: dataToUpdate,
@@ -209,6 +241,7 @@ exports.update = async (req, res) => {
         email: true,
         role: true,
         isActive: true,
+        schoolId: true, // ← Add this line
       },
     });
 
@@ -232,7 +265,7 @@ exports.update = async (req, res) => {
       }
 
       await logAudit({
-        schoolId: updated.schoolId,
+        schoolId: updated.schoolId, // ← Now this will have a valid value
         userId: currentUser?.id,
         action: "user.update",
         resource: "user",
@@ -248,7 +281,7 @@ exports.update = async (req, res) => {
     } catch (auditErr) {
       console.error(
         "Audit log error (user.update):",
-        auditErr?.message || auditErr
+        auditErr?.message || auditErr,
       );
     }
 

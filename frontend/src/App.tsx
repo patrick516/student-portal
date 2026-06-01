@@ -22,10 +22,26 @@ import StudentProfilePage from "@/app/students/StudentProfilePage";
 import HeadteacherRegisterPage from "@/app/auth/HeadteacherRegisterPage";
 import TermsPage from "@/app/terms/TermsPage";
 import FeeSettingsPage from "@/app/fees/FeeSettingsPage";
+import SettingsPage from "@/app/settings/SettingsPage";
+import FeeReportPage from "@/app/reports/FeeReportPage";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem("token");
   return token ? <>{children}</> : <Navigate to="/auth" replace />;
+}
+
+function RequireRole({
+  children,
+  roles,
+}: {
+  children: React.ReactNode;
+  roles: string[];
+}) {
+  const user = JSON.parse(localStorage.getItem("user") || "null");
+  if (!user || !roles.includes(user.role)) {
+    return <Navigate to="/app" replace />;
+  }
+  return <>{children}</>;
 }
 
 export default function App() {
@@ -65,7 +81,16 @@ export default function App() {
           <Route path="guardians" element={<GuardiansPage />} />
           <Route path="student-profile" element={<StudentProfilePage />} />
           <Route path="terms" element={<TermsPage />} />
+          <Route path="reports/fees" element={<FeeReportPage />} />
           <Route path="fee-settings" element={<FeeSettingsPage />} />
+          <Route
+            path="settings"
+            element={
+              <RequireRole roles={["admin"]}>
+                <SettingsPage />
+              </RequireRole>
+            }
+          />
           <Route
             path="exams/form-teacher"
             element={<FormTeacherOverviewPage />}

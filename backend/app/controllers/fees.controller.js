@@ -109,6 +109,7 @@ exports.listPayments = async (req, res) => {
 };
 
 // POST /api/fees/payments  { invoiceId, studentId, amount, method?, reference? }
+// POST /api/fees/payments  { invoiceId, studentId, amount, method?, reference? }
 exports.createPayment = async (req, res) => {
   try {
     const schoolId = req.user.schoolId;
@@ -122,34 +123,67 @@ exports.createPayment = async (req, res) => {
     const inv = await prisma.invoice.findFirst({
       where: { id: invoiceId, schoolId },
     });
-    if (!inv) return res.status(404).send({ error: "Invoice not found" });
+    if (!inv) return res.status(404).json({ error: "Invoice not found" });
 
+    const payAmount = Number(amount);
+
+    // Use overrideAmount if set, otherwise use amount
+    const invoiceTotal = Number(inv.overrideAmount ?? inv.amount);
+
+    // How much has already been paid on this invoice
+    const prevAgg = await prisma.payment.aggregate({
+      _sum: { amount: true },
+      where: { invoiceId },
+    });
+    const alreadyPaid = Number(prevAgg._sum.amount || 0);
+    const remaining = Math.max(0, invoiceTotal - alreadyPaid);
+
+    // Split payment: up to remaining goes to invoice, rest is credit
+    const appliedAmount = Math.min(payAmount, remaining + payAmount); // full amount recorded
+    const overpayment = Math.max(0, payAmount - remaining);
+
+    // Create the payment record
     const pay = await prisma.payment.create({
       data: {
         schoolId,
         invoiceId,
         studentId,
-        amount,
+        amount: payAmount,
         method: method || null,
         reference: reference || null,
         recordedBy: req.user.id,
+        type: "payment",
       },
     });
 
-    // recompute invoice status
-    const agg = await prisma.payment.aggregate({
-      _sum: { amount: true },
-      where: { invoiceId },
-    });
-    const totalPaid = Number(agg._sum.amount || 0);
-    const total = Number(inv.amount || 0);
+    // Recompute invoice status
+    const newTotalPaid = alreadyPaid + payAmount;
     const status =
-      totalPaid >= total ? "paid" : totalPaid > 0 ? "partial" : "unpaid";
+      newTotalPaid >= invoiceTotal
+        ? "paid"
+        : newTotalPaid > 0
+          ? "partial"
+          : "unpaid";
 
     const updatedInv = await prisma.invoice.update({
       where: { id: invoiceId },
       data: { status },
     });
+
+    // If overpayment, store as credit
+    let credit = null;
+    if (overpayment > 0) {
+      credit = await prisma.studentCredit.create({
+        data: {
+          schoolId,
+          studentId,
+          amount: overpayment,
+          source: "overpayment",
+          termId: inv.termId || null,
+          status: "available",
+        },
+      });
+    }
 
     await logAudit({
       schoolId,
@@ -157,15 +191,103 @@ exports.createPayment = async (req, res) => {
       action: "fees.create-payment",
       resource: "payment",
       targetId: pay.id,
-      meta: { invoiceId, amount },
+      meta: { invoiceId, amount: payAmount, overpayment, creditId: credit?.id },
     });
 
-    res.status(201).json({ payment: pay, invoice: updatedInv });
+    res.status(201).json({
+      payment: pay,
+      invoice: updatedInv,
+      overpayment,
+      credit,
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 };
 
+// PUT /api/fees/invoices/:id/override
+// Bursar/admin manually overrides invoice amount for a specific student
+exports.overrideInvoice = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { overrideAmount, overrideReason } = req.body || {};
+    const schoolId = req.user.schoolId;
+
+    if (overrideAmount === undefined) {
+      return res.status(400).json({ error: "overrideAmount required" });
+    }
+
+    const amt = Number(overrideAmount);
+    if (amt <= 0) {
+      return res.status(400).json({ error: "overrideAmount must be > 0" });
+    }
+
+    const inv = await prisma.invoice.findFirst({
+      where: { id, schoolId },
+    });
+    if (!inv) return res.status(404).json({ error: "Invoice not found" });
+
+    // Recompute status based on new override amount
+    const paidAgg = await prisma.payment.aggregate({
+      _sum: { amount: true },
+      where: { invoiceId: id },
+    });
+    const totalPaid = Number(paidAgg._sum.amount || 0);
+    const status =
+      totalPaid >= amt ? "paid" : totalPaid > 0 ? "partial" : "unpaid";
+
+    const updated = await prisma.invoice.update({
+      where: { id },
+      data: {
+        overrideAmount: amt,
+        overrideReason: overrideReason?.trim() || null,
+        status,
+      },
+    });
+
+    await logAudit({
+      schoolId,
+      userId: req.user.id,
+      action: "fees.invoice.override",
+      resource: "invoice",
+      targetId: id,
+      meta: { overrideAmount: amt, overrideReason },
+    });
+
+    res.json({
+      data: {
+        ...updated,
+        amount: Number(updated.amount),
+        overrideAmount: Number(updated.overrideAmount),
+      },
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+};
+
+// GET /api/fees/credits?studentId=
+exports.listCredits = async (req, res) => {
+  try {
+    const { studentId } = req.query;
+    const schoolId = req.user.schoolId;
+
+    const credits = await prisma.studentCredit.findMany({
+      where: {
+        schoolId,
+        ...(studentId ? { studentId } : {}),
+        status: "available",
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const total = credits.reduce((sum, c) => sum + Number(c.amount), 0);
+
+    res.json({ data: credits, totalCredit: total });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+};
 // GET /api/fees/payments/:id/receipt  (unchanged from previous)
 exports.getPaymentReceipt = async (req, res) => {
   try {
